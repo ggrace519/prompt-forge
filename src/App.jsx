@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as promptService from './lib/promptService';
 import logoUrl from './assets/logo.png';
 
-// ── Section definitions for the Breakdown tab ─────────────────────────────────
 const SECTIONS = [
   { key: 'role',          label: 'Role & Objective'  },
   { key: 'instructions',  label: 'Instructions'      },
@@ -13,12 +12,11 @@ const SECTIONS = [
   { key: 'reinforcement', label: 'Reinforcement'     },
 ];
 
-// ── SVG icons (inline, no external deps) ─────────────────────────────────────
-
 function IconGear() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <circle cx="12" cy="12" r="3"/>
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
     </svg>
@@ -28,7 +26,8 @@ function IconGear() {
 function IconCopy() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
     </svg>
@@ -38,7 +37,8 @@ function IconCopy() {
 function IconCheck() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <polyline points="20 6 9 17 4 12"/>
     </svg>
   );
@@ -49,7 +49,8 @@ function IconChevron({ up }) {
     <svg
       className={`chevron-icon${up ? ' up' : ''}`}
       width="12" height="12" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <polyline points="6 9 12 15 18 9"/>
     </svg>
   );
@@ -58,7 +59,8 @@ function IconChevron({ up }) {
 function IconArrowLeft() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <line x1="19" y1="12" x2="5" y2="12"/>
       <polyline points="12 19 5 12 12 5"/>
     </svg>
@@ -68,7 +70,8 @@ function IconArrowLeft() {
 function IconX() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18"/>
       <line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
@@ -78,7 +81,8 @@ function IconX() {
 function IconMinus() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <line x1="5" y1="12" x2="19" y2="12"/>
     </svg>
   );
@@ -87,7 +91,8 @@ function IconMinus() {
 function IconWarning() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
       <line x1="12" y1="9" x2="12" y2="13"/>
       <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -117,8 +122,6 @@ function WindowControls() {
     </div>
   );
 }
-
-// ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [view,         setView]         = useState('loading');
@@ -200,8 +203,6 @@ export default function App() {
   );
 }
 
-// ── Settings View ─────────────────────────────────────────────────────────────
-
 const MODELS = [
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5  — fastest, cheapest'   },
   { value: 'claude-sonnet-4-5',         label: 'Sonnet 4.5 — balanced'             },
@@ -216,21 +217,18 @@ function SettingsView({
 }) {
   const [selectedProvider, setSelectedProvider] = useState(currentProvider || 'anthropic');
 
-  // Anthropic fields
-  const [key,           setKey]          = useState('');
+  const [key,           setKey]           = useState('');
   const [selectedModel, setSelectedModel] = useState(currentModel);
 
-  // Ollama fields
-  const [serverUrl,          setServerUrl]          = useState(currentOllamaUrl || 'http://localhost:11434');
-  const [ollamaKey,          setOllamaKey]          = useState('');
-  const [availableModels,    setAvailableModels]    = useState([]);
-  const [selectedOllamaModel,setSelectedOllamaModel]= useState(currentOllamaModel || '');
-  const [fetchingModels,     setFetchingModels]     = useState(false);
-  const [fetchError,         setFetchError]         = useState('');
+  const [serverUrl,           setServerUrl]           = useState(currentOllamaUrl || 'http://localhost:11434');
+  const [ollamaKey,           setOllamaKey]           = useState('');
+  const [availableModels,     setAvailableModels]     = useState([]);
+  const [selectedOllamaModel, setSelectedOllamaModel] = useState(currentOllamaModel || '');
+  const [fetchingModels,      setFetchingModels]      = useState(false);
+  const [fetchError,          setFetchError]          = useState('');
 
   const [saving, setSaving] = useState(false);
 
-  // Auto-fetch models when switching to Ollama if we have a stored URL
   useEffect(() => {
     if (selectedProvider === 'ollama' && serverUrl && availableModels.length === 0) {
       handleFetchModels();
@@ -285,12 +283,14 @@ function SettingsView({
   return (
     <div className="settings-view">
       <div className="settings-topbar">
-        {onBack && (
-          <button className="settings-back-btn" onClick={onBack} aria-label="Back">
-            <IconArrowLeft />
-            Back
-          </button>
-        )}
+        <div className="settings-topbar-left">
+          {onBack && (
+            <button className="settings-back-btn" onClick={onBack} aria-label="Back">
+              <IconArrowLeft />
+              Back
+            </button>
+          )}
+        </div>
         <div className="settings-topbar-controls">
           <WindowControls />
         </div>
@@ -301,7 +301,6 @@ function SettingsView({
           <img src={logoUrl} alt="PromptForge" className="app-logo" />
         </div>
 
-        {/* ── Provider selector ── */}
         <div className="provider-tabs" role="tablist" aria-label="Provider">
           <button
             role="tab"
@@ -321,7 +320,6 @@ function SettingsView({
           </button>
         </div>
 
-        {/* ── Anthropic fields ── */}
         {selectedProvider === 'anthropic' && (
           <>
             <p className="settings-desc">
@@ -368,7 +366,6 @@ function SettingsView({
           </>
         )}
 
-        {/* ── Ollama fields ── */}
         {selectedProvider === 'ollama' && (
           <>
             <p className="settings-desc">
@@ -415,7 +412,9 @@ function SettingsView({
                   ? <><span className="btn-spinner" /> Connecting…</>
                   : 'Fetch Models'}
               </button>
-              {fetchError && <span className="ollama-fetch-error">{fetchError}</span>}
+              {fetchError && (
+                <span className="ollama-fetch-error" role="alert">{fetchError}</span>
+              )}
             </div>
 
             <div className="field-group">
@@ -448,13 +447,12 @@ function SettingsView({
   );
 }
 
-// ── Main View ─────────────────────────────────────────────────────────────────
-
 function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSettings }) {
   const [task,      setTask]      = useState('');
   const [loading,   setLoading]   = useState(false);
   const [result,    setResult]    = useState(null);
   const [error,     setError]     = useState('');
+  const [errorKey,  setErrorKey]  = useState(0);
   const [activeTab, setActiveTab] = useState('assembled');
 
   const modelLabel = provider === 'anthropic'
@@ -478,6 +476,8 @@ function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSett
       setActiveTab('assembled');
     } catch (err) {
       setError(err.message || 'Something went wrong. Check your API key and try again.');
+      // Increment key so the alert node remounts and screen readers re-announce
+      setErrorKey((k) => k + 1);
     } finally {
       setLoading(false);
     }
@@ -485,11 +485,16 @@ function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSett
 
   return (
     <div className="app-shell">
-      {/* ── Top Bar ── */}
       <header className="top-bar">
         <div className="top-bar-left">
           <img src={logoUrl} alt="PromptForge" className="app-logo-sm" />
-          <span className="model-badge">{modelLabel}</span>
+          <span
+            className="model-badge"
+            title={modelLabel}
+            aria-label={`Active model: ${modelLabel}`}
+          >
+            {modelLabel}
+          </span>
         </div>
         <div className="top-bar-right">
           <button
@@ -520,13 +525,11 @@ function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSett
         </div>
       </header>
 
-      {/* ── Scrollable Body ── */}
       <div className="main-body">
-        {/* Task Input */}
         <div className="input-group">
           <textarea
             className="task-textarea"
-            rows={4}
+            rows={5}
             placeholder="Describe your task… (Ctrl+Enter to generate)"
             value={task}
             onChange={(e) => setTask(e.target.value)}
@@ -545,15 +548,13 @@ function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSett
           </button>
         </div>
 
-        {/* Error Banner */}
         {error && (
-          <div className="error-banner" role="alert">
+          <div key={errorKey} className="error-banner" role="alert">
             <span className="error-icon"><IconWarning /></span>
             <span>{error}</span>
           </div>
         )}
 
-        {/* Results */}
         {result && (
           <ResultsPanel
             result={result}
@@ -565,8 +566,6 @@ function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSett
     </div>
   );
 }
-
-// ── Results Panel ─────────────────────────────────────────────────────────────
 
 function ResultsPanel({ result, activeTab, onTabChange }) {
   return (
@@ -598,8 +597,6 @@ function ResultsPanel({ result, activeTab, onTabChange }) {
   );
 }
 
-// ── Assembled Tab ─────────────────────────────────────────────────────────────
-
 function AssembledTab({ assembled }) {
   const [copied, setCopied] = useState(false);
 
@@ -611,13 +608,14 @@ function AssembledTab({ assembled }) {
 
   return (
     <div className="assembled-tab">
-      <div className="assembled-header">
-        <span className="section-label-small">Complete Prompt</span>
+      {/* Single action row — no redundant "Complete Prompt" label, recovers ~28px */}
+      <div className="assembled-actions">
         <button
           className={`btn btn-copy${copied ? ' copied' : ''}`}
           onClick={handleCopy}
+          aria-label={copied ? 'Copied to clipboard' : 'Copy prompt to clipboard'}
         >
-          {copied ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
+          {copied ? <><IconCheck /> Copied</> : <><IconCopy /> Copy All</>}
         </button>
       </div>
       <pre className="assembled-text">{assembled}</pre>
@@ -625,22 +623,25 @@ function AssembledTab({ assembled }) {
   );
 }
 
-// ── Breakdown Tab ─────────────────────────────────────────────────────────────
-
 function BreakdownTab({ result }) {
-  const [expanded, setExpanded] = useState({ role: true, instructions: true });
+  // All sections start collapsed — no arbitrary two-open default that implies false hierarchy
+  const [expanded, setExpanded] = useState({});
 
   function toggle(key) {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  // Hide sections with no generated content rather than showing empty cards
+  const populatedSections = SECTIONS.filter(({ key }) => result[key]?.trim());
+
   return (
     <div className="breakdown-tab">
-      {SECTIONS.map(({ key, label }) => (
+      {populatedSections.map(({ key, label }) => (
         <SectionCard
           key={key}
+          sectionKey={key}
           label={label}
-          content={result[key] ?? ''}
+          content={result[key]}
           isExpanded={!!expanded[key]}
           onToggle={() => toggle(key)}
         />
@@ -649,13 +650,10 @@ function BreakdownTab({ result }) {
   );
 }
 
-// ── Section Card ──────────────────────────────────────────────────────────────
-
-function SectionCard({ label, content, isExpanded, onToggle }) {
+function SectionCard({ sectionKey, label, content, isExpanded, onToggle }) {
   const [copied, setCopied] = useState(false);
 
-  async function handleCopy(e) {
-    e.stopPropagation();
+  async function handleCopy() {
     await promptService.copyToClipboard(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -663,30 +661,36 @@ function SectionCard({ label, content, isExpanded, onToggle }) {
 
   return (
     <div className={`section-card${isExpanded ? ' expanded' : ''}`}>
-      <div
-        className="card-header"
-        onClick={onToggle}
-        role="button"
-        tabIndex={0}
-        aria-expanded={isExpanded}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggle()}
-      >
-        <span className="card-label">{label}</span>
-        <div className="card-actions">
-          <button
-            className={`icon-btn small${copied ? ' success' : ''}`}
-            onClick={handleCopy}
-            title={`Copy ${label}`}
-            aria-label={`Copy ${label}`}
-          >
-            {copied ? <IconCheck /> : <IconCopy />}
-          </button>
+      {/*
+        Fix: previously a div[role=button] contained a <button> (copy), which is
+        a button-inside-interactive-element violation. Now the toggle is a real
+        <button> and the copy action sits outside it at the same DOM level.
+      */}
+      <div className="card-header">
+        <button
+          className="card-toggle"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          aria-controls={`section-body-${sectionKey}`}
+        >
+          <span className="card-label">{label}</span>
           <IconChevron up={isExpanded} />
-        </div>
+        </button>
+        <button
+          className={`icon-btn small card-copy-btn${copied ? ' success' : ''}`}
+          onClick={handleCopy}
+          title={`Copy ${label}`}
+          aria-label={`Copy ${label}`}
+        >
+          {copied ? <IconCheck /> : <IconCopy />}
+        </button>
       </div>
 
       {isExpanded && (
-        <div className="card-body">
+        <div
+          id={`section-body-${sectionKey}`}
+          className="card-body"
+        >
           <pre className="card-content">{content}</pre>
         </div>
       )}

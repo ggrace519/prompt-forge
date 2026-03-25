@@ -2,7 +2,6 @@
    PromptForge — Dark theme, VS Code sidebar density
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* ── CSS Variables ─────────────────────────────────────────────────────────── */
 :root {
   --bg:            #181818;
   --surface:       #222222;
@@ -29,7 +28,6 @@
   --transition:    0.12s ease;
 }
 
-/* ── Reset ─────────────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -58,23 +56,21 @@ body {
   flex-direction: column;
 }
 
-/* Opt-in text selection for interactive text areas */
 input, textarea, pre, .assembled-text, .card-content {
   user-select: text;
 }
 
-/* Default: no text selection (nav/button feel) */
 button, label, span, h1, p {
   user-select: none;
 }
 
-/* ── Focus ring — consistent visible indicator for keyboard nav ────────────── */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-/* ── Init Screen ───────────────────────────────────────────────────────────── */
+/* ── Loading screen ─────────────────────────────────────────────────────────── */
+
 .init-screen {
   display: flex;
   align-items: center;
@@ -84,7 +80,6 @@ button, label, span, h1, p {
   outline: 1px solid var(--border);
 }
 
-/* ── Spinner ───────────────────────────────────────────────────────────────── */
 .spinner {
   width: 20px;
   height: 20px;
@@ -108,7 +103,8 @@ button, label, span, h1, p {
   to { transform: rotate(360deg); }
 }
 
-/* ── Settings View ─────────────────────────────────────────────────────────── */
+/* ── Settings view ──────────────────────────────────────────────────────────── */
+
 .settings-view {
   display: flex;
   flex-direction: column;
@@ -117,17 +113,23 @@ button, label, span, h1, p {
   outline: 1px solid var(--border);
 }
 
-/* Top bar in settings — mirrors main view chrome */
 .settings-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 6px 0 8px;
   height: 38px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   -webkit-app-region: drag;
+}
+
+/* Isolated left zone so only the back button is no-drag, not the whole left half */
+.settings-topbar-left {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: no-drag;
 }
 
 .settings-topbar-controls {
@@ -140,12 +142,11 @@ button, label, span, h1, p {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 24px 24px 20px;
+  gap: 11px;
+  padding: 16px 20px 16px;
   overflow-y: auto;
 }
 
-/* Tight visual grouping: label sits directly above its input */
 .field-group {
   display: flex;
   flex-direction: column;
@@ -154,11 +155,12 @@ button, label, span, h1, p {
 
 .settings-header {
   text-align: center;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }
 
+/* Reduced from 220px — this window is 380px wide, the logo was eating too much vertical space */
 .app-logo {
-  width: 220px;
+  width: 180px;
   height: auto;
   display: block;
   margin: 0 auto;
@@ -173,7 +175,7 @@ button, label, span, h1, p {
   font-size: 12px;
   color: var(--text-muted);
   text-align: center;
-  line-height: 1.65;
+  line-height: 1.6;
   padding: 0 4px;
 }
 
@@ -187,22 +189,28 @@ button, label, span, h1, p {
   font-size: 12px;
   font-family: var(--font-ui);
   cursor: pointer;
-  padding: 0 8px;
-  height: 100%;
+  padding: 0 10px;
+  height: 38px;
   border-radius: 0;
   transition: color var(--transition), background var(--transition);
-  -webkit-app-region: no-drag;
 }
+
 .settings-back-btn:hover {
   color: var(--text);
   background: var(--surface-2);
+}
+
+.settings-back-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .settings-link-row {
   text-align: center;
 }
 
-/* ── Provider Toggle ───────────────────────────────────────────────────────── */
+/* ── Provider tabs ──────────────────────────────────────────────────────────── */
+
 .provider-tabs {
   display: flex;
   background: var(--surface-2);
@@ -225,60 +233,24 @@ button, label, span, h1, p {
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
 }
+
 .provider-tab:hover:not(.active) {
   color: var(--text);
   background: var(--surface-3);
 }
+
 .provider-tab.active {
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
+
 .provider-tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-/* ── Ollama-specific elements ──────────────────────────────────────────────── */
-.field-label-optional {
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--text-dim);
-  font-size: 10px;
-}
-
-.ollama-fetch-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.ollama-fetch-error {
-  font-size: 11.5px;
-  color: var(--error);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── Secondary button ──────────────────────────────────────────────────────── */
-.btn-secondary {
-  background: var(--surface-2);
-  color: var(--text-muted);
-  border-color: var(--border);
-}
-.btn-secondary:not(:disabled):hover {
-  background: var(--surface-3);
-  color: var(--text);
-  border-color: var(--border-focus);
-}
-.btn-secondary:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
+/* ── Form elements ──────────────────────────────────────────────────────────── */
 
 .field-label {
   font-size: 11px;
@@ -288,180 +260,14 @@ button, label, span, h1, p {
   letter-spacing: 0.6px;
 }
 
-.link {
-  color: var(--accent);
-  font-size: 12px;
-  text-decoration: none;
-  transition: color var(--transition);
-}
-.link:hover {
-  color: var(--accent-hover);
-  text-decoration: underline;
-}
-
-/* ── App Shell ─────────────────────────────────────────────────────────────── */
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--bg);
-  outline: 1px solid var(--border);
-}
-
-/* ── Top Bar ───────────────────────────────────────────────────────────────── */
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0 0 12px;
-  height: 38px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  -webkit-app-region: drag;
-}
-
-/* Buttons inside the drag region must opt out */
-.top-bar button {
-  -webkit-app-region: no-drag;
-}
-
-.top-bar-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-
-.model-badge {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--accent);
-  background: var(--accent-dim);
-  border: 1px solid rgba(124, 106, 247, 0.2);
-  border-radius: 10px;
-  padding: 1px 7px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
-}
-
-/* ── Top Bar Right Group ───────────────────────────────────────────────────── */
-.top-bar-right {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  height: 100%;
-  flex-shrink: 0;
-}
-
-/* Visual separator between gear icon and window controls */
-.top-bar-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border-focus);
-  margin: 0 2px;
-  flex-shrink: 0;
-}
-
-/* ── Window Chrome Controls (close / minimize) ─────────────────────────────── */
-.window-controls {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  -webkit-app-region: no-drag;
-}
-
-.win-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  background: transparent;
-  border: none;
+.field-label-optional {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--text-dim);
-  cursor: pointer;
-  border-radius: 0;
-  transition: color var(--transition), background var(--transition);
-  line-height: 1;
-  -webkit-app-region: no-drag;
-  flex-shrink: 0;
-}
-.win-btn:hover {
-  background: var(--surface-2);
-  color: var(--text-muted);
-}
-.win-btn-close:hover {
-  color: #ffffff;
-  background: #c42b1c;
-}
-/* Focus rings on win buttons — suppress outline-offset since they're flush */
-.win-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  font-size: 10px;
 }
 
-/* ── Icon Button ───────────────────────────────────────────────────────────── */
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  border-radius: var(--radius);
-  transition: color var(--transition), background var(--transition);
-  line-height: 1;
-  flex-shrink: 0;
-}
-.icon-btn:hover {
-  color: var(--text);
-  background: var(--surface-2);
-}
-.icon-btn.small {
-  width: 22px;
-  height: 22px;
-}
-.icon-btn.success {
-  color: var(--success);
-}
-
-/* ── Main Body ─────────────────────────────────────────────────────────────── */
-.main-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-}
-
-/* Thin custom scrollbar */
-.main-body::-webkit-scrollbar { width: 5px; }
-.main-body::-webkit-scrollbar-track { background: transparent; }
-.main-body::-webkit-scrollbar-thumb {
-  background: var(--surface-3);
-  border-radius: 3px;
-}
-.main-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-
-/* ── Input Group ───────────────────────────────────────────────────────────── */
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* ── Shared Form Controls ──────────────────────────────────────────────────── */
 .text-input,
 .task-textarea {
   width: 100%;
@@ -510,7 +316,26 @@ button, label, span, h1, p {
   color: var(--text);
 }
 
-/* ── Buttons ───────────────────────────────────────────────────────────────── */
+/* ── Ollama section ─────────────────────────────────────────────────────────── */
+
+.ollama-fetch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ollama-fetch-error {
+  font-size: 11.5px;
+  color: var(--error);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -523,7 +348,8 @@ button, label, span, h1, p {
   font-weight: 500;
   font-family: var(--font-ui);
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition), opacity var(--transition), box-shadow var(--transition);
+  transition: background var(--transition), border-color var(--transition),
+              opacity var(--transition), box-shadow var(--transition);
   white-space: nowrap;
   line-height: 1;
 }
@@ -533,7 +359,6 @@ button, label, span, h1, p {
   cursor: not-allowed;
 }
 
-/* Explicit focus override for buttons — use inset ring */
 .btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -544,11 +369,13 @@ button, label, span, h1, p {
   color: #ffffff;
   border-color: var(--accent);
 }
+
 .btn-primary:not(:disabled):hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   box-shadow: 0 2px 8px var(--accent-glow);
 }
+
 .btn-primary:not(:disabled):active {
   background: var(--accent-active);
   border-color: var(--accent-active);
@@ -559,7 +386,23 @@ button, label, span, h1, p {
   width: 100%;
 }
 
-/* Copy button — compact secondary style */
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.btn-secondary:not(:disabled):hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-focus);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
 .btn-copy {
   background: var(--surface-2);
   color: var(--text-muted);
@@ -568,18 +411,211 @@ button, label, span, h1, p {
   font-size: 12px;
   gap: 4px;
 }
+
 .btn-copy:hover {
   background: var(--surface-3);
   color: var(--text);
   border-color: var(--border-focus);
 }
+
 .btn-copy.copied {
   color: var(--success);
   border-color: rgba(74, 222, 128, 0.3);
-  background: rgba(74, 222, 128, 0.07);
+  background: rgba(74, 222, 128, 0.08);
+  animation: copied-pulse 0.2s ease;
 }
 
-/* ── Error Banner ──────────────────────────────────────────────────────────── */
+@keyframes copied-pulse {
+  0%   { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* ── Links ──────────────────────────────────────────────────────────────────── */
+
+.link {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* ── Main app shell ─────────────────────────────────────────────────────────── */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  outline: 1px solid var(--border);
+}
+
+/* ── Top bar ────────────────────────────────────────────────────────────────── */
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 0 12px;
+  height: 38px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.top-bar button {
+  -webkit-app-region: no-drag;
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.model-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid rgba(124, 106, 247, 0.2);
+  border-radius: 10px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  /* cursor shows the full name is readable via title tooltip */
+  cursor: default;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.top-bar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-focus);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Window controls ────────────────────────────────────────────────────────── */
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 0;
+  transition: color var(--transition), background var(--transition);
+  line-height: 1;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
+.win-btn:hover {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.win-btn-close:hover {
+  color: #ffffff;
+  background: #c42b1c;
+}
+
+.win-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── Icon buttons ───────────────────────────────────────────────────────────── */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius);
+  transition: color var(--transition), background var(--transition);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.icon-btn.small {
+  width: 22px;
+  height: 22px;
+}
+
+.icon-btn.success {
+  color: var(--success);
+}
+
+/* ── Main body ──────────────────────────────────────────────────────────────── */
+
+.main-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-height: 0;
+}
+
+.main-body::-webkit-scrollbar { width: 5px; }
+.main-body::-webkit-scrollbar-track { background: transparent; }
+.main-body::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 3px;
+}
+.main-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ── Input group ────────────────────────────────────────────────────────────── */
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Error banner ───────────────────────────────────────────────────────────── */
+
 .error-banner {
   display: flex;
   align-items: flex-start;
@@ -592,6 +628,7 @@ button, label, span, h1, p {
   font-size: 12px;
   line-height: 1.55;
 }
+
 .error-icon {
   flex-shrink: 0;
   margin-top: 1px;
@@ -599,17 +636,21 @@ button, label, span, h1, p {
   align-items: center;
 }
 
-/* ── Results Panel ─────────────────────────────────────────────────────────── */
+/* ── Results panel ──────────────────────────────────────────────────────────── */
+
 .results-panel {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  flex-shrink: 0;
+  /* Grow to fill available space in the expanded 640px window */
+  flex: 1;
+  min-height: 0;
 }
 
-/* ── Tab Bar ───────────────────────────────────────────────────────────────── */
+/* ── Tab bar ────────────────────────────────────────────────────────────────── */
+
 .tab-bar {
   display: flex;
   background: var(--surface);
@@ -622,7 +663,6 @@ button, label, span, h1, p {
   padding: 7px 0;
   background: transparent;
   border: none;
-  /* Use inset shadow instead of border-bottom so active tab doesn't shift layout */
   box-shadow: inset 0 -2px 0 transparent;
   color: var(--text-muted);
   font-size: 12px;
@@ -632,50 +672,58 @@ button, label, span, h1, p {
   transition: color var(--transition), box-shadow var(--transition), background var(--transition);
   letter-spacing: 0.3px;
 }
+
 .tab-btn:hover {
   color: var(--text);
   background: var(--surface-2);
 }
+
 .tab-btn.active {
   color: var(--accent);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
+
 .tab-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-/* ── Tab Content ───────────────────────────────────────────────────────────── */
+/* ── Tab content ────────────────────────────────────────────────────────────── */
+
 .tab-content {
   background: var(--bg);
+  flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* ── Assembled Tab ─────────────────────────────────────────────────────────── */
+/* ── Assembled tab ──────────────────────────────────────────────────────────── */
+
 .assembled-tab {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.assembled-header {
+/* Slim action bar — removed redundant "Complete Prompt" label, recovering vertical space */
+.assembled-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
+  justify-content: flex-end;
+  padding: 5px 8px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.section-label-small {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-}
-
+/* assembled-text now fills the flex container and scrolls internally — no fixed max-height
+   that wastes space when the window expands to 640px */
 .assembled-text {
+  flex: 1;
   padding: 10px;
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -683,9 +731,9 @@ button, label, span, h1, p {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 330px;
   overflow-y: auto;
   background: var(--surface);
+  min-height: 0;
 }
 
 .assembled-text::-webkit-scrollbar { width: 4px; }
@@ -695,12 +743,14 @@ button, label, span, h1, p {
   border-radius: 2px;
 }
 
-/* ── Breakdown Tab ─────────────────────────────────────────────────────────── */
+/* ── Breakdown tab ──────────────────────────────────────────────────────────── */
+
 .breakdown-tab {
   display: flex;
   flex-direction: column;
-  max-height: 360px;
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .breakdown-tab::-webkit-scrollbar { width: 4px; }
@@ -710,38 +760,66 @@ button, label, span, h1, p {
   border-radius: 2px;
 }
 
-/* ── Section Card ──────────────────────────────────────────────────────────── */
+/* ── Section cards ──────────────────────────────────────────────────────────── */
+
 .section-card {
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
+
 .section-card:last-child {
   border-bottom: none;
 }
 
+/*
+  card-header is now a flex container holding a real <button> (card-toggle) and
+  the copy icon-btn side by side. No more button-inside-interactive-element issue.
+*/
 .card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 7px 10px 7px 12px;
-  cursor: pointer;
   background: var(--surface);
   transition: background var(--transition);
-  user-select: none;
-  gap: 8px;
-  /* Left accent line on expanded — visible distinction from hover */
   border-left: 2px solid transparent;
 }
-.card-header:hover {
-  background: var(--surface-2);
-}
-/* Keyboard focus on the toggle row */
-.card-header:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
+
 .section-card.expanded .card-header {
   background: var(--surface-2);
   border-left-color: var(--accent);
+}
+
+/* card-toggle is the actual expand/collapse button — takes all remaining width */
+.card-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 6px 7px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  color: inherit;
+  font-family: var(--font-ui);
+  min-width: 0;
+  transition: background var(--transition);
+}
+
+.card-toggle:hover {
+  background: var(--surface-2);
+}
+
+.card-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Copy button sits outside card-toggle at the right edge */
+.card-copy-btn {
+  flex-shrink: 0;
+  margin-right: 6px;
 }
 
 .card-label {
@@ -750,24 +828,21 @@ button, label, span, h1, p {
   color: var(--text);
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
 .section-card.expanded .card-label {
   color: var(--accent);
 }
 
-.card-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.chevron-icon {
+  color: var(--text-dim);
+  transition: transform var(--transition);
   flex-shrink: 0;
 }
 
-/* Chevron rotation */
-.chevron-icon {
-  color: var(--text-dim);
-  transition: transform 0.18s ease;
-  flex-shrink: 0;
-}
 .chevron-icon.up {
   transform: rotate(180deg);
 }
@@ -785,7 +860,7 @@ button, label, span, h1, p {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 150px;
+  max-height: 140px;
   overflow-y: auto;
 }
 
