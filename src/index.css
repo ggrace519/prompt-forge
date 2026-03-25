@@ -157,11 +157,16 @@ button, label, span, h1, p {
   padding-bottom: 4px;
 }
 
-.settings-wordmark {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.4px;
+.app-logo {
+  width: 220px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.app-logo-sm {
+  height: 22px;
+  width: auto;
 }
 
 .settings-desc {
@@ -329,13 +334,6 @@ button, label, span, h1, p {
   flex: 1;
 }
 
-.app-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.1px;
-  white-space: nowrap;
-}
 
 .model-badge {
   font-size: 10px;

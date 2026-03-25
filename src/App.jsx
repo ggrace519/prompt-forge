@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as promptService from './lib/promptService';
+import logoUrl from './assets/logo.png';
 
 // ── Section definitions for the Breakdown tab ─────────────────────────────────
 const SECTIONS = [
@@ -297,7 +298,7 @@ function SettingsView({
 
       <div className="settings-inner">
         <div className="settings-header">
-          <span className="settings-wordmark">PromptForge</span>
+          <img src={logoUrl} alt="PromptForge" className="app-logo" />
         </div>
 
         {/* ── Provider selector ── */}
@@ -487,7 +488,7 @@ function MainView({ provider, apiKey, model, ollamaUrl, ollamaApiKey, onOpenSett
       {/* ── Top Bar ── */}
       <header className="top-bar">
         <div className="top-bar-left">
-          <span className="app-name">PromptForge</span>
+          <img src={logoUrl} alt="PromptForge" className="app-logo-sm" />
           <span className="model-badge">{modelLabel}</span>
         </div>
         <div className="top-bar-right">
