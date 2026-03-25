@@ -1,0 +1,11 @@
+node_modules/
+dist/
+release/
+.claude/settings.local.json
+
+# electron-store config (contains encrypted API keys)
+*.electron-store
+
+# OS
+.DS_Store
+Thumbs.db

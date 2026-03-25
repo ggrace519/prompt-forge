@@ -1,0 +1,365 @@
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import App from '../src/App.jsx';
+
+// ── Mock the entire service layer ─────────────────────────────────────────────
+// App never touches window.electronAPI directly — all calls go through
+// promptService, so mocking that module is sufficient.
+
+vi.mock('../src/lib/promptService.js', () => ({
+  getApiKey:          vi.fn(),
+  getModel:           vi.fn(),
+  saveApiKey:         vi.fn(),
+  saveModel:          vi.fn(),
+  generatePrompt:     vi.fn(),
+  copyToClipboard:    vi.fn(),
+  closeWindow:        vi.fn(),
+  minimizeWindow:     vi.fn(),
+  resizeWindow:       vi.fn(),
+  getProvider:        vi.fn(),
+  saveProvider:       vi.fn(),
+  getOllamaUrl:       vi.fn(),
+  saveOllamaUrl:      vi.fn(),
+  getOllamaApiKey:    vi.fn(),
+  saveOllamaApiKey:   vi.fn(),
+  getOllamaModel:     vi.fn(),
+  saveOllamaModel:    vi.fn(),
+  fetchOllamaModels:  vi.fn(),
+}));
+
+import * as promptService from '../src/lib/promptService.js';
+
+const DEFAULT_MODEL    = 'claude-haiku-4-5-20251001';
+const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
+
+/** Set sensible defaults for every getter so tests don't need to repeat them. */
+function setupDefaultMocks() {
+  promptService.getProvider.mockResolvedValue('anthropic');
+  promptService.getApiKey.mockResolvedValue('');
+  promptService.getModel.mockResolvedValue(DEFAULT_MODEL);
+  promptService.getOllamaUrl.mockResolvedValue(DEFAULT_OLLAMA_URL);
+  promptService.getOllamaApiKey.mockResolvedValue('');
+  promptService.getOllamaModel.mockResolvedValue('');
+  promptService.fetchOllamaModels.mockResolvedValue({ success: true, models: [] });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  setupDefaultMocks();
+});
+
+
+// ── Initial routing ───────────────────────────────────────────────────────────
+
+describe('App — initial routing', () => {
+  it('shows Settings view when no API key is stored', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('sk-ant-api03-…')).toBeInTheDocument();
+    });
+  });
+
+  it('shows Main view when an API key is stored', async () => {
+    promptService.getApiKey.mockResolvedValue('sk-ant-real-key');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows Settings when getApiKey rejects', async () => {
+    promptService.getApiKey.mockRejectedValue(new Error('store error'));
+    promptService.getModel.mockRejectedValue(new Error('store error'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('sk-ant-api03-…')).toBeInTheDocument();
+    });
+  });
+});
+
+// ── Settings → Main transition ────────────────────────────────────────────────
+
+describe('App — Settings view', () => {
+  beforeEach(() => {
+    promptService.getApiKey.mockResolvedValue('');
+    promptService.getModel.mockResolvedValue(DEFAULT_MODEL);
+    promptService.saveApiKey.mockResolvedValue(true);
+    promptService.saveModel.mockResolvedValue(true);
+  });
+
+  it('Save button is disabled while the input is empty', async () => {
+    render(<App />);
+
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    expect(screen.getByRole('button', { name: /Save & Continue/i })).toBeDisabled();
+  });
+
+  it('Save button enables once a key is typed', async () => {
+    render(<App />);
+
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.change(screen.getByPlaceholderText('sk-ant-api03-…'), {
+      target: { value: 'sk-ant-test' },
+    });
+
+    expect(screen.getByRole('button', { name: /Save & Continue/i })).not.toBeDisabled();
+  });
+
+  it('does not show a back button when no key exists (first-time setup)', async () => {
+    render(<App />);
+
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    expect(screen.queryByRole('button', { name: /Back/i })).not.toBeInTheDocument();
+  });
+
+  it('navigates to Main view after saving', async () => {
+    render(<App />);
+
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.change(screen.getByPlaceholderText('sk-ant-api03-…'), {
+      target: { value: 'sk-ant-test-key' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save & Continue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
+    });
+
+    expect(promptService.saveApiKey).toHaveBeenCalledWith('sk-ant-test-key');
+  });
+});
+
+// ── Main view ─────────────────────────────────────────────────────────────────
+
+describe('App — Main view', () => {
+  beforeEach(() => {
+    promptService.getApiKey.mockResolvedValue('sk-ant-stored');
+  });
+
+  it('Generate button is disabled when textarea is empty', async () => {
+    render(<App />);
+
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    expect(screen.getByRole('button', { name: /Generate Prompt/i })).toBeDisabled();
+  });
+
+  it('calls generatePrompt with the task, key, and model on submit', async () => {
+    const MOCK_RESULT = {
+      role: 'Writer', instructions: 'Write clearly', context: 'Blog',
+      outputFormat: 'Markdown', reasoning: '1. Think', examples: 'Q→A',
+      reinforcement: 'Be concise', assembled: '## Role\nWriter',
+    };
+    promptService.generatePrompt.mockResolvedValue(MOCK_RESULT);
+
+    render(<App />);
+
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), {
+      target: { value: 'Write a blog post about AI' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+
+    await waitFor(() => {
+      expect(promptService.generatePrompt).toHaveBeenCalledWith(
+        'Write a blog post about AI',
+        'sk-ant-stored',
+        DEFAULT_MODEL,
+        'anthropic',
+        DEFAULT_OLLAMA_URL,
+        '',
+      );
+    });
+  });
+
+  it('shows the assembled prompt after a successful generation', async () => {
+    promptService.generatePrompt.mockResolvedValue({
+      role: 'r', instructions: 'i', context: 'c',
+      outputFormat: 'f', reasoning: 'rs', examples: 'ex',
+      reinforcement: 're', assembled: 'THE FULL PROMPT TEXT',
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), {
+      target: { value: 'some task' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('THE FULL PROMPT TEXT')).toBeInTheDocument();
+    });
+  });
+
+  it('shows an error banner when generation fails', async () => {
+    promptService.generatePrompt.mockRejectedValue(new Error('401 Unauthorized'));
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), {
+      target: { value: 'some task' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('401 Unauthorized');
+    });
+  });
+
+  it('gear icon navigates back to Settings', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.click(screen.getByTitle('API Key Settings'));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('sk-ant-api03-…')).toBeInTheDocument();
+    });
+  });
+
+  it('back button appears in Settings when navigating from Main', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.click(screen.getByTitle('API Key Settings'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Back/i })).toBeInTheDocument();
+    });
+  });
+
+  it('back button returns to Main view without saving', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.click(screen.getByTitle('API Key Settings'));
+    await waitFor(() => screen.getByRole('button', { name: /Back/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Back/i }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
+    });
+    expect(promptService.saveApiKey).not.toHaveBeenCalled();
+  });
+});
+
+// ── Ollama provider ────────────────────────────────────────────────────────────
+
+describe('App — Ollama provider', () => {
+  it('shows Ollama fields when Ollama tab is clicked', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
+
+    expect(screen.getByPlaceholderText('http://localhost:11434')).toBeInTheDocument();
+  });
+
+  it('auto-fetches models when switching to Ollama tab', async () => {
+    promptService.fetchOllamaModels.mockResolvedValue({
+      success: true,
+      models: ['llama3.2', 'mistral', 'phi3'],
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
+
+    // Models populated by auto-fetch (no manual button click needed)
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'llama3.2' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('option', { name: 'mistral' })).toBeInTheDocument();
+  });
+
+  it('Fetch Models button triggers a re-fetch', async () => {
+    // Auto-fetch returns nothing; manual click returns models
+    promptService.fetchOllamaModels
+      .mockResolvedValueOnce({ success: true, models: [] })
+      .mockResolvedValueOnce({ success: true, models: ['llama3.2', 'mistral'] });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
+
+    // Wait for auto-fetch to finish so button is re-enabled
+    await waitFor(() => screen.getByRole('button', { name: /Fetch Models/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Fetch Models/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'llama3.2' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows fetch error when Ollama server is unreachable', async () => {
+    promptService.fetchOllamaModels.mockResolvedValue({
+      success: false,
+      error: 'ECONNREFUSED',
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('ECONNREFUSED')).toBeInTheDocument();
+    });
+  });
+
+  it('Save & Continue is disabled until a model is fetched and selected', async () => {
+    // Auto-fetch returns nothing → no model selected → save disabled
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
+
+    // Wait for auto-fetch (returning []) to finish
+    await waitFor(() => screen.getByRole('button', { name: /Fetch Models/i }));
+
+    expect(screen.getByRole('button', { name: /Save & Continue/i })).toBeDisabled();
+  });
+
+  it('navigates to Main view after saving Ollama config', async () => {
+    promptService.fetchOllamaModels.mockResolvedValue({
+      success: true,
+      models: ['llama3.2'],
+    });
+    promptService.saveProvider.mockResolvedValue(true);
+    promptService.saveOllamaUrl.mockResolvedValue(true);
+    promptService.saveOllamaApiKey.mockResolvedValue(true);
+    promptService.saveOllamaModel.mockResolvedValue(true);
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
+
+    // Auto-fetch populates the model list
+    await waitFor(() => screen.getByRole('option', { name: 'llama3.2' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save & Continue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
+    });
+    expect(promptService.saveProvider).toHaveBeenCalledWith('ollama');
+    expect(promptService.saveOllamaModel).toHaveBeenCalledWith('llama3.2');
+  });
+});
