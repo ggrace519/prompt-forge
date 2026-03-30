@@ -145,7 +145,7 @@ function createWindow() {
     height: 320,
     show: false,
     frame: false,
-    resizable: false,
+    resizable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     transparent: false,

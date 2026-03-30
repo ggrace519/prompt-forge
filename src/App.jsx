@@ -295,90 +295,42 @@ export default function App() {
 
 // ── SettingsView ──────────────────────────────────────────────────────────────
 
-function SlotConfigSection({
-  label, slotKey, config, onChange,
-  ollamaModels, ollamaModelsLoading,
-}) {
-  const [open, setOpen] = useState(false);
-  const provider = config?.provider || 'anthropic';
-  const model = config?.model || '';
+/** Unified model dropdown — Anthropic + Ollama models in one list. */
+function SlotModelSelect({ label, slotKey, config, onChange, ollamaModels }) {
+  // Encode provider into the value: "anthropic:model-id" or "ollama:model-name"
+  const currentValue = config ? `${config.provider}:${config.model}` : '';
 
-  function setProvider(p) {
-    onChange({ ...config, provider: p, model: p === 'anthropic' ? MODELS[0].value : '' });
-  }
-
-  function setModel(m) {
-    onChange({ ...config, model: m });
+  function handleChange(encoded) {
+    const sep = encoded.indexOf(':');
+    const provider = encoded.slice(0, sep);
+    const model = encoded.slice(sep + 1);
+    onChange({ provider, model });
   }
 
   return (
-    <div className="settings-section">
-      <button
-        className="settings-section-toggle"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
+    <div className="field-group">
+      <label className="field-label" htmlFor={`${slotKey}-model`}>{label}</label>
+      <select
+        id={`${slotKey}-model`}
+        className="text-input select-input"
+        value={currentValue}
+        onChange={(e) => handleChange(e.target.value)}
       >
-        <span className="settings-section-label">{label}</span>
-        <span className="settings-section-summary">
-          {provider === 'anthropic'
-            ? (MODELS.find((m) => m.value === model)?.label.split('—')[0].trim() || model || 'Not set')
-            : (model || 'Not set')
-          }
-        </span>
-        <IconChevron up={open} />
-      </button>
-
-      {open && (
-        <div className="settings-section-body">
-          <div className="provider-tabs" role="tablist" aria-label={`${label} provider`}>
-            <button
-              role="tab"
-              aria-selected={provider === 'anthropic'}
-              className={`provider-tab${provider === 'anthropic' ? ' active' : ''}`}
-              onClick={() => setProvider('anthropic')}
-            >
-              Anthropic
-            </button>
-            <button
-              role="tab"
-              aria-selected={provider === 'ollama'}
-              className={`provider-tab${provider === 'ollama' ? ' active' : ''}`}
-              onClick={() => setProvider('ollama')}
-            >
-              Ollama
-            </button>
-          </div>
-
-          <div className="field-group">
-            <label className="field-label" htmlFor={`${slotKey}-model`}>Model</label>
-            {provider === 'anthropic' ? (
-              <select
-                id={`${slotKey}-model`}
-                className="text-input select-input"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                {MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            ) : (
-              <select
-                id={`${slotKey}-model`}
-                className="text-input select-input"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={ollamaModels.length === 0}
-              >
-                {ollamaModels.length === 0
-                  ? <option value="">— fetch models first —</option>
-                  : ollamaModels.map((m) => <option key={m} value={m}>{m}</option>)
-                }
-              </select>
-            )}
-          </div>
-        </div>
-      )}
+        <optgroup label="Anthropic">
+          {MODELS.map((m) => (
+            <option key={m.value} value={`anthropic:${m.value}`}>
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+        {ollamaModels.length > 0 && (
+          <optgroup label="Ollama">
+            {ollamaModels.map((m) => (
+              <option key={m} value={`ollama:${m}`}>{m}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
     </div>
   );
 }
@@ -474,11 +426,11 @@ function SettingsView({
     }
   }
 
-  // Can save if at least one slot has a usable config
+  // Can save if we have credentials for the providers in use
   const hasAnthropicKey = !!(key.trim() || currentApiKey);
-  const hasAnyAnthropicSlot = Object.values(slots).some((s) => s.provider === 'anthropic');
-  const hasAnyOllamaSlot = Object.values(slots).some((s) => s.provider === 'ollama' && s.model);
-  const canSave = ((hasAnthropicKey && hasAnyAnthropicSlot) || hasAnyOllamaSlot) && !saving;
+  const usesAnthropic = Object.values(slots).some((s) => s?.provider === 'anthropic');
+  const usesOllama = Object.values(slots).some((s) => s?.provider === 'ollama');
+  const canSave = ((!usesAnthropic || hasAnthropicKey) && (!usesOllama || serverUrl)) && !saving;
 
   return (
     <div className="settings-view">
@@ -569,30 +521,27 @@ function SettingsView({
           )}
         </div>
 
-        {/* Slot config sections */}
-        <SlotConfigSection
+        {/* Slot model selectors */}
+        <SlotModelSelect
           label="Classification Model"
           slotKey="classify"
           config={slots.classify}
           onChange={(v) => updateSlot('classify', v)}
           ollamaModels={ollamaModels}
-          ollamaModelsLoading={fetchingModels}
         />
-        <SlotConfigSection
+        <SlotModelSelect
           label="Simple & Standard Generation"
           slotKey="generateSimple"
           config={slots.generateSimple}
           onChange={(v) => updateSlot('generateSimple', v)}
           ollamaModels={ollamaModels}
-          ollamaModelsLoading={fetchingModels}
         />
-        <SlotConfigSection
+        <SlotModelSelect
           label="Complex Generation"
           slotKey="generateComplex"
           config={slots.generateComplex}
           onChange={(v) => updateSlot('generateComplex', v)}
           ollamaModels={ollamaModels}
-          ollamaModelsLoading={fetchingModels}
         />
 
         {/* Send targets */}
@@ -738,10 +687,10 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
     setHistory([]);
   }
 
-  async function handleSlotChange(slotKey, field, value) {
+  async function handleSlotChange(slotKey, provider, model) {
     const updated = {
       ...slotConfig,
-      [slotKey]: { ...slotConfig[slotKey], [field]: value },
+      [slotKey]: { provider, model },
     };
     setSlotConfig(updated);
     await promptService.saveSlotConfig(updated);
@@ -899,37 +848,38 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
 // ── OverrideSlot ──────────────────────────────────────────────────────────────
 
 function OverrideSlot({ label, slotKey, config, ollamaModels = [], onChange }) {
-  const model = config?.model || '';
-  const provider = config?.provider || 'anthropic';
+  const currentValue = config ? `${config.provider}:${config.model}` : '';
+
+  function handleChange(encoded) {
+    const sep = encoded.indexOf(':');
+    const provider = encoded.slice(0, sep);
+    const model = encoded.slice(sep + 1);
+    onChange(slotKey, provider, model);
+  }
 
   return (
     <div className="override-slot">
       <span className="override-label">{label}</span>
-      {provider === 'anthropic' ? (
-        <select
-          className="override-select"
-          value={model}
-          onChange={(e) => onChange(slotKey, 'model', e.target.value)}
-        >
+      <select
+        className="override-select"
+        value={currentValue}
+        onChange={(e) => handleChange(e.target.value)}
+      >
+        <optgroup label="Anthropic">
           {MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
+            <option key={m.value} value={`anthropic:${m.value}`}>
               {m.label.split('—')[0].trim()}
             </option>
           ))}
-        </select>
-      ) : (
-        <select
-          className="override-select"
-          value={model}
-          onChange={(e) => onChange(slotKey, 'model', e.target.value)}
-          disabled={ollamaModels.length === 0}
-        >
-          {ollamaModels.length === 0
-            ? <option value={model}>{model || '— no models —'}</option>
-            : ollamaModels.map((m) => <option key={m} value={m}>{m}</option>)
-          }
-        </select>
-      )}
+        </optgroup>
+        {ollamaModels.length > 0 && (
+          <optgroup label="Ollama">
+            {ollamaModels.map((m) => (
+              <option key={m} value={`ollama:${m}`}>{m}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
     </div>
   );
 }
