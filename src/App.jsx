@@ -649,6 +649,23 @@ function MainView({ slotConfig, setSlotConfig, sendTargets, history, setHistory,
   const [showOverride, setShowOverride] = useState(false);
   const [showHistory,  setShowHistory]  = useState(false);
   const [toast,        setToast]        = useState('');
+  const [ollamaModels, setOllamaModels] = useState([]);
+
+  // Fetch Ollama models if any slot uses Ollama
+  useEffect(() => {
+    const hasOllamaSlot = slotConfig && Object.values(slotConfig).some(
+      (s) => s && s.provider === 'ollama'
+    );
+    if (hasOllamaSlot) {
+      promptService.getOllamaUrl().then((url) => {
+        promptService.getOllamaApiKey().then((key) => {
+          promptService.fetchOllamaModels(url, key).then((result) => {
+            if (result.success) setOllamaModels(result.models);
+          });
+        });
+      });
+    }
+  }, [slotConfig]);
 
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
@@ -823,18 +840,21 @@ function MainView({ slotConfig, setSlotConfig, sendTargets, history, setHistory,
                   label="Classify"
                   slotKey="classify"
                   config={slotConfig?.classify}
+                  ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
                 <OverrideSlot
                   label="Simple"
                   slotKey="generateSimple"
                   config={slotConfig?.generateSimple}
+                  ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
                 <OverrideSlot
                   label="Complex"
                   slotKey="generateComplex"
                   config={slotConfig?.generateComplex}
+                  ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
               </div>
@@ -870,12 +890,9 @@ function MainView({ slotConfig, setSlotConfig, sendTargets, history, setHistory,
 
 // ── OverrideSlot ──────────────────────────────────────────────────────────────
 
-function OverrideSlot({ label, slotKey, config, onChange }) {
+function OverrideSlot({ label, slotKey, config, ollamaModels = [], onChange }) {
   const model = config?.model || '';
   const provider = config?.provider || 'anthropic';
-
-  // For override row we only show model select for simplicity — provider is set in settings
-  const models = provider === 'anthropic' ? MODELS : [];
 
   return (
     <div className="override-slot">
@@ -886,16 +903,24 @@ function OverrideSlot({ label, slotKey, config, onChange }) {
           value={model}
           onChange={(e) => onChange(slotKey, 'model', e.target.value)}
         >
-          {models.map((m) => (
+          {MODELS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label.split('—')[0].trim()}
             </option>
           ))}
         </select>
       ) : (
-        <span className="override-label" style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-          {model || 'Ollama'}
-        </span>
+        <select
+          className="override-select"
+          value={model}
+          onChange={(e) => onChange(slotKey, 'model', e.target.value)}
+          disabled={ollamaModels.length === 0}
+        >
+          {ollamaModels.length === 0
+            ? <option value={model}>{model || '— no models —'}</option>
+            : ollamaModels.map((m) => <option key={m} value={m}>{m}</option>)
+          }
+        </select>
       )}
     </div>
   );
