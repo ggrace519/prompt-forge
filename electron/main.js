@@ -241,58 +241,134 @@ app.whenReady().then(() => {
     tray.popUpContextMenu(menu);
   });
 
+  // ── Provider call helper ──────────────────────────────────────────────────
+
+  async function callProvider(provider, model, apiKey, ollamaUrl, ollamaApiKey, systemPrompt, userMessage, maxTokens = 4096) {
+    if (provider === 'ollama') {
+      const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
+      const headers = { 'Content-Type': 'application/json' };
+      if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
+
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Ollama ${res.status}: ${body}`);
+      }
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('Ollama returned no content');
+      return content;
+    }
+
+    // Anthropic path
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey });
+
+    const response = await client.messages.create({
+      model: model || DEFAULT_ANTHROPIC_MODEL,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+
+    const textBlock = response.content.find((b) => b.type === 'text');
+    if (!textBlock?.text) throw new Error('Anthropic returned no text content');
+    return textBlock.text;
+  }
+
+  /** Resolve credentials for a given slot. */
+  function getSlotCredentials(slot) {
+    const provider = store.get(`${slot}.provider`, 'anthropic');
+    const model    = store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL);
+    const apiKey   = (() => {
+      const stored      = store.get('apiKey', '');
+      const isEncrypted = store.get('apiKeyEncrypted', false);
+      if (!stored) return '';
+      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+      }
+      return stored;
+    })();
+    const ollamaUrl = store.get('ollamaUrl', 'http://localhost:11434');
+    const ollamaApiKey = (() => {
+      const stored      = store.get('ollamaApiKey', '');
+      const isEncrypted = store.get('ollamaApiKeyEncrypted', false);
+      if (!stored) return '';
+      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+      }
+      return stored;
+    })();
+    return { provider, model, apiKey, ollamaUrl, ollamaApiKey };
+  }
+
   // ── IPC Handlers ───────────────────────────────────────────────────────────
 
-  // Generate a structured prompt via Anthropic or Ollama
-  ipcMain.handle('generate-prompt', async (_event, { task, apiKey, model, provider = 'anthropic', ollamaUrl = '', ollamaApiKey = '' }) => {
+  // Generate a structured prompt — classify-then-generate two-call flow
+  ipcMain.handle('generate-prompt', async (_event, { task, tier: explicitTier }) => {
     try {
-      let textContent;
+      let tier = explicitTier;
+      let classifyCreds = null;
 
-      if (provider === 'ollama') {
-        const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
-        const headers = { 'Content-Type': 'application/json' };
-        if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
-
-        const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: `Generate a perfect AI prompt for this task: ${task}` },
-            ],
-            stream: false,
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.text().catch(() => '');
-          throw new Error(`Ollama ${res.status}: ${body}`);
+      // Step 1: Classify (unless tier was provided by the user)
+      if (!tier) {
+        classifyCreds = getSlotCredentials('classify');
+        try {
+          const classifyText = await callProvider(
+            classifyCreds.provider, classifyCreds.model,
+            classifyCreds.apiKey, classifyCreds.ollamaUrl, classifyCreds.ollamaApiKey,
+            CLASSIFY_PROMPT,
+            `Classify this task: ${task}`,
+            50,
+          );
+          const classifyJson = JSON.parse(extractJSON(classifyText));
+          if (['simple', 'standard', 'complex'].includes(classifyJson.tier)) {
+            tier = classifyJson.tier;
+          } else {
+            tier = 'standard';
+          }
+        } catch (err) {
+          console.error('[classify] fallback to standard:', err.message);
+          tier = 'standard';
         }
-        const data = await res.json();
-        textContent = data.choices?.[0]?.message?.content;
-        if (!textContent) throw new Error('Ollama returned no content');
-      } else {
-        // Dynamic import handles both ESM and CJS builds of the SDK
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client = new Anthropic({ apiKey });
-
-        const response = await client.messages.create({
-          model: model || 'claude-haiku-4-5-20251001',
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: `Generate a perfect AI prompt for this task: ${task}` }],
-        });
-
-        // Find the text block by type — don't assume content[0] is always text
-        const textBlock = response.content.find((b) => b.type === 'text');
-        if (!textBlock?.text) throw new Error('Anthropic returned no text content — the model may have stopped early');
-        textContent = textBlock.text;
       }
+
+      // Step 2: Generate with the matching template
+      const genSlot = (tier === 'complex') ? 'generateComplex' : 'generateSimple';
+      const genCreds = getSlotCredentials(genSlot);
+      const systemPrompt = TEMPLATE_MAP[tier];
+
+      const textContent = await callProvider(
+        genCreds.provider, genCreds.model,
+        genCreds.apiKey, genCreds.ollamaUrl, genCreds.ollamaApiKey,
+        systemPrompt,
+        `Generate a perfect AI prompt for this task: ${task}`,
+        4096,
+      );
 
       const jsonText = extractJSON(textContent);
       const parsed   = JSON.parse(jsonText);
-      return { success: true, data: parsed };
+
+      return {
+        success: true,
+        data: parsed,
+        tier,
+        classifyProvider: classifyCreds?.provider || null,
+        classifyModel: classifyCreds?.model || null,
+        generateProvider: genCreds.provider,
+        generateModel: genCreds.model,
+      };
     } catch (err) {
       console.error('[generate-prompt] error:', err);
       return { success: false, error: err.message || String(err) };
