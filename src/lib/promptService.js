@@ -72,6 +72,10 @@ export async function fetchOllamaModels(url, apiKey) {
   return getIPC().fetchOllamaModels(url, apiKey);
 }
 
+export async function fetchAnthropicModels() {
+  return getIPC().fetchAnthropicModels();
+}
+
 // ── Send targets ────────────────────────────────────────────────────────────
 
 export async function getSendTargets() {

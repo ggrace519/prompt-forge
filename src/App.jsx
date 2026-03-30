@@ -12,11 +12,10 @@ const SECTIONS = [
   { key: 'reinforcement', label: 'Reinforcement'     },
 ];
 
-const MODELS = [
-  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5  — fastest, cheapest'   },
-  { value: 'claude-sonnet-4-5',         label: 'Sonnet 4.5 — balanced'             },
-  { value: 'claude-sonnet-4-6',         label: 'Sonnet 4.6 — latest'               },
-  { value: 'claude-opus-4-5',           label: 'Opus 4.5   — most capable'         },
+// Fallback Anthropic models if API fetch fails
+const FALLBACK_ANTHROPIC_MODELS = [
+  'claude-sonnet-4-5-20250514',
+  'claude-haiku-4-5-20251001',
 ];
 
 const TIER_COLORS = {
@@ -296,7 +295,7 @@ export default function App() {
 // ── SettingsView ──────────────────────────────────────────────────────────────
 
 /** Unified model dropdown — Anthropic + Ollama models in one list. */
-function SlotModelSelect({ label, slotKey, config, onChange, ollamaModels }) {
+function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ollamaModels }) {
   // Encode provider into the value: "anthropic:model-id" or "ollama:model-name"
   const currentValue = config ? `${config.provider}:${config.model}` : '';
 
@@ -316,13 +315,13 @@ function SlotModelSelect({ label, slotKey, config, onChange, ollamaModels }) {
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
       >
-        <optgroup label="Anthropic">
-          {MODELS.map((m) => (
-            <option key={m.value} value={`anthropic:${m.value}`}>
-              {m.label}
-            </option>
-          ))}
-        </optgroup>
+        {anthropicModels.length > 0 && (
+          <optgroup label="Anthropic">
+            {anthropicModels.map((m) => (
+              <option key={m} value={`anthropic:${m}`}>{m}</option>
+            ))}
+          </optgroup>
+        )}
         {ollamaModels.length > 0 && (
           <optgroup label="Ollama">
             {ollamaModels.map((m) => (
@@ -344,14 +343,15 @@ function SettingsView({
   const [key,           setKey]           = useState('');
   const [serverUrl,     setServerUrl]     = useState(currentOllamaUrl || 'http://localhost:11434');
   const [ollamaKey,     setOllamaKey]     = useState('');
+  const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [ollamaModels,  setOllamaModels]  = useState([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError,    setFetchError]    = useState('');
 
   const [slots, setSlots] = useState(currentSlotConfig || {
-    classify:       { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-    generateSimple: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-    generateComplex:{ provider: 'anthropic', model: 'claude-sonnet-4-5' },
+    classify:       { provider: 'anthropic', model: FALLBACK_ANTHROPIC_MODELS[0] },
+    generateSimple: { provider: 'anthropic', model: FALLBACK_ANTHROPIC_MODELS[0] },
+    generateComplex:{ provider: 'anthropic', model: FALLBACK_ANTHROPIC_MODELS[0] },
   });
 
   const [targets, setTargets] = useState(currentSendTargets || []);
@@ -360,9 +360,15 @@ function SettingsView({
 
   const [saving, setSaving] = useState(false);
 
-  // Always auto-fetch Ollama models on mount so they're ready when the user switches a slot
+  // Auto-fetch both Anthropic and Ollama models on mount
   useEffect(() => {
-    if (serverUrl && ollamaModels.length === 0) {
+    promptService.fetchAnthropicModels().then((result) => {
+      if (result.success && result.models.length > 0) {
+        setAnthropicModels(result.models);
+      }
+    }).catch(() => {});
+
+    if (serverUrl) {
       handleFetchModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -527,6 +533,7 @@ function SettingsView({
           slotKey="classify"
           config={slots.classify}
           onChange={(v) => updateSlot('classify', v)}
+          anthropicModels={anthropicModels}
           ollamaModels={ollamaModels}
         />
         <SlotModelSelect
@@ -534,6 +541,7 @@ function SettingsView({
           slotKey="generateSimple"
           config={slots.generateSimple}
           onChange={(v) => updateSlot('generateSimple', v)}
+          anthropicModels={anthropicModels}
           ollamaModels={ollamaModels}
         />
         <SlotModelSelect
@@ -541,6 +549,7 @@ function SettingsView({
           slotKey="generateComplex"
           config={slots.generateComplex}
           onChange={(v) => updateSlot('generateComplex', v)}
+          anthropicModels={anthropicModels}
           ollamaModels={ollamaModels}
         />
 
@@ -613,10 +622,15 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
   const [showOverride, setShowOverride] = useState(false);
   const [showHistory,  setShowHistory]  = useState(false);
   const [toast,        setToast]        = useState('');
+  const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [ollamaModels, setOllamaModels] = useState([]);
 
-  // Always fetch Ollama models so they're ready in the override row
+  // Fetch both model lists for the override row
   useEffect(() => {
+    promptService.fetchAnthropicModels().then((result) => {
+      if (result.success && result.models.length > 0) setAnthropicModels(result.models);
+    }).catch(() => {});
+
     if (ollamaUrl) {
       promptService.fetchOllamaModels(ollamaUrl, ollamaApiKey || '').then((result) => {
         if (result.success) setOllamaModels(result.models);
@@ -627,9 +641,6 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
     if (!slot) return '';
-    if (slot.provider === 'anthropic') {
-      return MODELS.find((m) => m.value === slot.model)?.label.split('—')[0].trim() || slot.model;
-    }
     return slot.model || '';
   })();
 
@@ -797,6 +808,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
                   label="Classify"
                   slotKey="classify"
                   config={slotConfig?.classify}
+                  anthropicModels={anthropicModels}
                   ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
@@ -804,6 +816,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
                   label="Simple"
                   slotKey="generateSimple"
                   config={slotConfig?.generateSimple}
+                  anthropicModels={anthropicModels}
                   ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
@@ -811,6 +824,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
                   label="Complex"
                   slotKey="generateComplex"
                   config={slotConfig?.generateComplex}
+                  anthropicModels={anthropicModels}
                   ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
@@ -847,7 +861,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
 
 // ── OverrideSlot ──────────────────────────────────────────────────────────────
 
-function OverrideSlot({ label, slotKey, config, ollamaModels = [], onChange }) {
+function OverrideSlot({ label, slotKey, config, anthropicModels = [], ollamaModels = [], onChange }) {
   const currentValue = config ? `${config.provider}:${config.model}` : '';
 
   function handleChange(encoded) {
@@ -865,13 +879,13 @@ function OverrideSlot({ label, slotKey, config, ollamaModels = [], onChange }) {
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
       >
-        <optgroup label="Anthropic">
-          {MODELS.map((m) => (
-            <option key={m.value} value={`anthropic:${m.value}`}>
-              {m.label.split('—')[0].trim()}
-            </option>
-          ))}
-        </optgroup>
+        {anthropicModels.length > 0 && (
+          <optgroup label="Anthropic">
+            {anthropicModels.map((m) => (
+              <option key={m} value={`anthropic:${m}`}>{m}</option>
+            ))}
+          </optgroup>
+        )}
         {ollamaModels.length > 0 && (
           <optgroup label="Ollama">
             {ollamaModels.map((m) => (

@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-ollama-api-key'),
   fetchOllamaModels: (url, apiKey) =>
     ipcRenderer.invoke('fetch-ollama-models', { url, apiKey }),
+  fetchAnthropicModels: () =>
+    ipcRenderer.invoke('fetch-anthropic-models'),
 
   // Send targets
   getSendTargets: () =>

@@ -22,6 +22,7 @@ vi.mock('../src/lib/promptService.js', () => ({
   getOllamaApiKey:    vi.fn(),
   saveOllamaApiKey:   vi.fn(),
   fetchOllamaModels:  vi.fn(),
+  fetchAnthropicModels: vi.fn(),
   getSendTargets:     vi.fn(),
   saveSendTargets:    vi.fn(),
   openExternalUrl:    vi.fn(),
@@ -47,6 +48,7 @@ function setupDefaultMocks() {
   promptService.getOllamaUrl.mockResolvedValue('http://localhost:11434');
   promptService.getOllamaApiKey.mockResolvedValue('');
   promptService.fetchOllamaModels.mockResolvedValue({ success: true, models: [] });
+  promptService.fetchAnthropicModels.mockResolvedValue({ success: true, models: ['claude-sonnet-4-5-20250514'] });
   promptService.getSendTargets.mockResolvedValue([
     { name: 'Claude', url: 'https://claude.ai/new' },
     { name: 'ChatGPT', url: 'https://chatgpt.com' },

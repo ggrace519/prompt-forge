@@ -392,6 +392,38 @@ app.whenReady().then(() => {
     }
   });
 
+  // Fetch available models from Anthropic API
+  ipcMain.handle('fetch-anthropic-models', async () => {
+    try {
+      // Decrypt the stored API key
+      const stored      = store.get('apiKey', '');
+      const isEncrypted = store.get('apiKeyEncrypted', false);
+      let apiKey = '';
+      if (stored && isEncrypted && safeStorage.isEncryptionAvailable()) {
+        try { apiKey = safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { /* */ }
+      } else {
+        apiKey = stored;
+      }
+      if (!apiKey) return { success: true, models: [] };
+
+      const res = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'anthropic-version': '2023-06-01',
+          'x-api-key': apiKey,
+        },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const models = (data.data || [])
+        .map((m) => m.id)
+        .filter(Boolean)
+        .sort();
+      return { success: true, models };
+    } catch (err) {
+      return { success: false, error: err.message || String(err) };
+    }
+  });
+
   // Persist API key — encrypted via OS-native DPAPI (Windows) / Keychain (macOS)
   // The stored value in config.json is an opaque base64 blob, never the raw key.
   ipcMain.handle('save-api-key', (_event, key) => {
