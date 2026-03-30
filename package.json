@@ -2,6 +2,7 @@
   "name": "prompt-forge-pro",
   "version": "1.0.0",
   "description": "AI prompt engineering tool that lives in the Windows system tray",
+  "license": "BUSL-1.1",
   "main": "electron/main.js",
   "scripts": {
     "postinstall": "node scripts/create-icon.js",
