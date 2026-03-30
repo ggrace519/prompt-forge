@@ -22,78 +22,85 @@ function getIPC() {
 
 /**
  * Generate a structured AI prompt for the given task.
- *
- * @param {string} task    Plain-language description of the AI task
- * @param {string} apiKey  Anthropic API key
- * @returns {Promise<{
- *   role: string,
- *   instructions: string,
- *   context: string,
- *   outputFormat: string,
- *   reasoning: string,
- *   examples: string,
- *   reinforcement: string,
- *   assembled: string,
- * }>}
+ * @param {string} task  Plain-language description of the AI task
+ * @param {string} [tier]  Optional tier override — skips classification when provided
+ * @returns {Promise<{ success: boolean, data: object, tier: string, classifyProvider?: string, classifyModel?: string, generateProvider: string, generateModel: string }>}
  */
-export async function generatePrompt(task, apiKey, model, provider = 'anthropic', ollamaUrl = '', ollamaApiKey = '') {
-  const result = await getIPC().generatePrompt({ task, apiKey, model, provider, ollamaUrl, ollamaApiKey });
+export async function generatePrompt(task, tier) {
+  const result = await getIPC().generatePrompt({ task, tier });
   if (!result.success) {
     throw new Error(result.error || 'Unknown error from main process');
   }
-  return result.data;
+  return result;
 }
 
-/**
- * Persist the Anthropic API key to local storage (electron-store).
- * @param {string} key
- */
+// ── API key (shared Anthropic key) ──────────────────────────────────────────
+
 export async function saveApiKey(key) {
   return getIPC().saveApiKey(key);
 }
 
-/**
- * Retrieve the persisted API key.
- * @returns {Promise<string>} Stored key or empty string
- */
 export async function getApiKey() {
   return getIPC().getApiKey();
 }
 
-/**
- * Write text to the system clipboard.
- * @param {string} text
- */
+// ── Clipboard ───────────────────────────────────────────────────────────────
+
 export async function copyToClipboard(text) {
   return getIPC().copyToClipboard(text);
 }
 
-/** @param {string} model */
-export async function saveModel(model) {
-  return getIPC().saveModel(model);
+// ── Slot config ─────────────────────────────────────────────────────────────
+
+export async function getSlotConfig() {
+  return getIPC().getSlotConfig();
 }
 
-/** @returns {Promise<string>} */
-export async function getModel() {
-  return getIPC().getModel();
+export async function saveSlotConfig(config) {
+  return getIPC().saveSlotConfig(config);
 }
 
-export async function saveProvider(provider) { return getIPC().saveProvider(provider); }
-export async function getProvider()           { return getIPC().getProvider(); }
+// ── Shared Ollama server config ─────────────────────────────────────────────
 
-export async function saveOllamaUrl(url)      { return getIPC().saveOllamaUrl(url); }
-export async function getOllamaUrl()          { return getIPC().getOllamaUrl(); }
+export async function saveOllamaUrl(url) { return getIPC().saveOllamaUrl(url); }
+export async function getOllamaUrl()     { return getIPC().getOllamaUrl(); }
 
-export async function saveOllamaApiKey(key)   { return getIPC().saveOllamaApiKey(key); }
-export async function getOllamaApiKey()       { return getIPC().getOllamaApiKey(); }
+export async function saveOllamaApiKey(key) { return getIPC().saveOllamaApiKey(key); }
+export async function getOllamaApiKey()     { return getIPC().getOllamaApiKey(); }
 
-export async function saveOllamaModel(model)  { return getIPC().saveOllamaModel(model); }
-export async function getOllamaModel()        { return getIPC().getOllamaModel(); }
-
-/** @param {string} url @param {string} apiKey */
 export async function fetchOllamaModels(url, apiKey) {
   return getIPC().fetchOllamaModels(url, apiKey);
 }
+
+// ── Send targets ────────────────────────────────────────────────────────────
+
+export async function getSendTargets() {
+  return getIPC().getSendTargets();
+}
+
+export async function saveSendTargets(targets) {
+  return getIPC().saveSendTargets(targets);
+}
+
+export async function openExternalUrl(url) {
+  return getIPC().openExternalUrl(url);
+}
+
+// ── Prompt history ──────────────────────────────────────────────────────────
+
+export async function getHistory() {
+  return getIPC().getHistory();
+}
+
+export async function saveHistoryEntry(entry) {
+  return getIPC().saveHistoryEntry(entry);
+}
+
+export async function clearHistory() {
+  return getIPC().clearHistory();
+}
+
+// ── Window controls ─────────────────────────────────────────────────────────
 
 export async function closeWindow() {
   return getIPC().closeWindow();
@@ -103,7 +110,6 @@ export async function minimizeWindow() {
   return getIPC().minimizeWindow();
 }
 
-/** @param {number} height */
 export async function resizeWindow(height) {
   return getIPC().resizeWindow(height);
 }
