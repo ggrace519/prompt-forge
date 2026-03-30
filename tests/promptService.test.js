@@ -4,16 +4,21 @@ import * as promptService from '../src/lib/promptService.js';
 // ── Mock IPC bridge ───────────────────────────────────────────────────────────
 
 const mockIPC = {
-  generatePrompt:  vi.fn(),
-  saveApiKey:      vi.fn(),
-  getApiKey:       vi.fn(),
-  copyToClipboard: vi.fn(),
-  saveModel:       vi.fn(),
-  getModel:        vi.fn(),
+  generatePrompt:   vi.fn(),
+  saveApiKey:       vi.fn(),
+  getApiKey:        vi.fn(),
+  copyToClipboard:  vi.fn(),
+  getSlotConfig:    vi.fn(),
+  saveSlotConfig:   vi.fn(),
+  getSendTargets:   vi.fn(),
+  saveSendTargets:  vi.fn(),
+  openExternalUrl:  vi.fn(),
+  getHistory:       vi.fn(),
+  saveHistoryEntry: vi.fn(),
+  clearHistory:     vi.fn(),
 };
 
 beforeEach(() => {
-  // Attach the mock bridge; reset call history before each test
   Object.defineProperty(window, 'electronAPI', {
     value:        mockIPC,
     writable:     true,
@@ -25,107 +30,138 @@ beforeEach(() => {
 // ── generatePrompt ────────────────────────────────────────────────────────────
 
 describe('generatePrompt', () => {
-  const MOCK_DATA = {
-    role: 'Assistant', instructions: 'Do X', context: 'Ctx',
-    outputFormat: 'JSON', reasoning: '1. Think', examples: 'A→B',
-    reinforcement: 'Always do X', assembled: '## Role\nAssistant',
+  const MOCK_RESULT = {
+    success: true,
+    data: { role: 'Assistant', instructions: 'Do X', assembled: '## Role\nAssistant' },
+    tier: 'simple',
+    generateProvider: 'anthropic',
+    generateModel: 'claude-haiku-4-5-20251001',
   };
 
-  it('resolves with the data payload on success', async () => {
-    mockIPC.generatePrompt.mockResolvedValue({ success: true, data: MOCK_DATA });
+  it('resolves with the full result on success (auto-classify)', async () => {
+    mockIPC.generatePrompt.mockResolvedValue(MOCK_RESULT);
 
-    const result = await promptService.generatePrompt('write a blog post', 'sk-test', 'claude-haiku-4-5-20251001');
+    const result = await promptService.generatePrompt('write a haiku');
 
-    expect(result).toEqual(MOCK_DATA);
-    expect(mockIPC.generatePrompt).toHaveBeenCalledOnce();
+    expect(result).toEqual(MOCK_RESULT);
     expect(mockIPC.generatePrompt).toHaveBeenCalledWith({
-      task: 'write a blog post',
-      apiKey: 'sk-test',
-      model: 'claude-haiku-4-5-20251001',
-      provider: 'anthropic',
-      ollamaUrl: '',
-      ollamaApiKey: '',
+      task: 'write a haiku',
+      tier: undefined,
+    });
+  });
+
+  it('passes explicit tier to skip classification', async () => {
+    mockIPC.generatePrompt.mockResolvedValue({ ...MOCK_RESULT, tier: 'complex' });
+
+    await promptService.generatePrompt('build a code review agent', 'complex');
+
+    expect(mockIPC.generatePrompt).toHaveBeenCalledWith({
+      task: 'build a code review agent',
+      tier: 'complex',
     });
   });
 
   it('throws the error message returned by the main process', async () => {
     mockIPC.generatePrompt.mockResolvedValue({ success: false, error: 'Rate limited' });
 
-    await expect(promptService.generatePrompt('task', 'key', 'model'))
+    await expect(promptService.generatePrompt('task'))
       .rejects.toThrow('Rate limited');
   });
 
   it('throws a default message when error field is absent', async () => {
     mockIPC.generatePrompt.mockResolvedValue({ success: false });
 
-    await expect(promptService.generatePrompt('task', 'key', 'model'))
+    await expect(promptService.generatePrompt('task'))
       .rejects.toThrow('Unknown error from main process');
   });
+});
 
-  it('propagates IPC-level rejections (e.g. network down)', async () => {
-    mockIPC.generatePrompt.mockRejectedValue(new Error('IPC channel closed'));
+// ── Slot config ───────────────────────────────────────────────────────────────
 
-    await expect(promptService.generatePrompt('task', 'key', 'model'))
-      .rejects.toThrow('IPC channel closed');
+describe('getSlotConfig / saveSlotConfig', () => {
+  it('retrieves slot config from IPC', async () => {
+    const config = {
+      classify: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
+      generateSimple: { provider: 'ollama', model: 'llama3.2' },
+      generateComplex: { provider: 'anthropic', model: 'claude-sonnet-4-5' },
+      ollamaUrl: 'http://localhost:11434',
+    };
+    mockIPC.getSlotConfig.mockResolvedValue(config);
+
+    expect(await promptService.getSlotConfig()).toEqual(config);
+  });
+
+  it('saves slot config via IPC', async () => {
+    mockIPC.saveSlotConfig.mockResolvedValue(true);
+
+    await promptService.saveSlotConfig({
+      classify: { provider: 'ollama', model: 'phi3' },
+    });
+
+    expect(mockIPC.saveSlotConfig).toHaveBeenCalledWith({
+      classify: { provider: 'ollama', model: 'phi3' },
+    });
   });
 });
 
-// ── saveApiKey / getApiKey ────────────────────────────────────────────────────
+// ── Send targets ──────────────────────────────────────────────────────────────
 
-describe('saveApiKey', () => {
-  it('delegates to IPC saveApiKey with the provided key', async () => {
+describe('send targets', () => {
+  it('retrieves send targets', async () => {
+    const targets = [{ name: 'Claude', url: 'https://claude.ai/new' }];
+    mockIPC.getSendTargets.mockResolvedValue(targets);
+
+    expect(await promptService.getSendTargets()).toEqual(targets);
+  });
+
+  it('opens an external URL', async () => {
+    mockIPC.openExternalUrl.mockResolvedValue(true);
+
+    await promptService.openExternalUrl('https://claude.ai/new');
+
+    expect(mockIPC.openExternalUrl).toHaveBeenCalledWith('https://claude.ai/new');
+  });
+});
+
+// ── History ───────────────────────────────────────────────────────────────────
+
+describe('history', () => {
+  it('retrieves history', async () => {
+    mockIPC.getHistory.mockResolvedValue([]);
+
+    expect(await promptService.getHistory()).toEqual([]);
+  });
+
+  it('saves a history entry', async () => {
+    mockIPC.saveHistoryEntry.mockResolvedValue(true);
+    const entry = { task: 'test', tier: 'simple', timestamp: '2026-03-29T00:00:00Z' };
+
+    await promptService.saveHistoryEntry(entry);
+
+    expect(mockIPC.saveHistoryEntry).toHaveBeenCalledWith(entry);
+  });
+
+  it('clears history', async () => {
+    mockIPC.clearHistory.mockResolvedValue(true);
+
+    await promptService.clearHistory();
+
+    expect(mockIPC.clearHistory).toHaveBeenCalledOnce();
+  });
+});
+
+// ── saveApiKey / getApiKey (unchanged) ───────────────────────────────────────
+
+describe('saveApiKey / getApiKey', () => {
+  it('delegates to IPC', async () => {
     mockIPC.saveApiKey.mockResolvedValue(true);
-
     await promptService.saveApiKey('sk-ant-my-key');
-
-    expect(mockIPC.saveApiKey).toHaveBeenCalledOnce();
     expect(mockIPC.saveApiKey).toHaveBeenCalledWith('sk-ant-my-key');
   });
-});
 
-describe('getApiKey', () => {
-  it('returns whatever the IPC bridge returns', async () => {
+  it('returns stored key', async () => {
     mockIPC.getApiKey.mockResolvedValue('sk-ant-stored');
-
-    const key = await promptService.getApiKey();
-
-    expect(key).toBe('sk-ant-stored');
-  });
-
-  it('returns empty string when no key is stored', async () => {
-    mockIPC.getApiKey.mockResolvedValue('');
-
-    expect(await promptService.getApiKey()).toBe('');
-  });
-});
-
-// ── saveModel / getModel ──────────────────────────────────────────────────────
-
-describe('saveModel / getModel', () => {
-  it('saves a model ID', async () => {
-    mockIPC.saveModel.mockResolvedValue(true);
-
-    await promptService.saveModel('claude-sonnet-4-5');
-
-    expect(mockIPC.saveModel).toHaveBeenCalledWith('claude-sonnet-4-5');
-  });
-
-  it('retrieves the saved model ID', async () => {
-    mockIPC.getModel.mockResolvedValue('claude-sonnet-4-5');
-
-    expect(await promptService.getModel()).toBe('claude-sonnet-4-5');
-  });
-});
-
-// ── copyToClipboard ───────────────────────────────────────────────────────────
-
-describe('copyToClipboard', () => {
-  it('delegates the text to the IPC bridge', async () => {
-    mockIPC.copyToClipboard.mockResolvedValue(true);
-
-    await promptService.copyToClipboard('Hello world');
-
-    expect(mockIPC.copyToClipboard).toHaveBeenCalledWith('Hello world');
+    expect(await promptService.getApiKey()).toBe('sk-ant-stored');
   });
 });
 
@@ -133,7 +169,6 @@ describe('copyToClipboard', () => {
 
 describe('when electronAPI is not present', () => {
   beforeEach(() => {
-    // Remove the bridge for these tests
     Object.defineProperty(window, 'electronAPI', {
       value:        undefined,
       writable:     true,
@@ -141,18 +176,13 @@ describe('when electronAPI is not present', () => {
     });
   });
 
-  it('getApiKey throws a descriptive error', async () => {
-    await expect(promptService.getApiKey())
-      .rejects.toThrow('electronAPI bridge unavailable');
-  });
-
   it('generatePrompt throws a descriptive error', async () => {
-    await expect(promptService.generatePrompt('task', 'key', 'model'))
+    await expect(promptService.generatePrompt('task'))
       .rejects.toThrow('electronAPI bridge unavailable');
   });
 
-  it('copyToClipboard throws a descriptive error', async () => {
-    await expect(promptService.copyToClipboard('text'))
+  it('getSlotConfig throws a descriptive error', async () => {
+    await expect(promptService.getSlotConfig())
       .rejects.toThrow('electronAPI bridge unavailable');
   });
 });

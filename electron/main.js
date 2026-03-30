@@ -10,6 +10,7 @@ const {
   clipboard,
   nativeImage,
   safeStorage,
+  shell,
 } = require('electron');
 const path  = require('path');
 const Store = require('electron-store');
@@ -20,9 +21,47 @@ const isDev = process.env.NODE_ENV === 'development';
 let tray = null;
 let win  = null;
 
-// ── System Prompt ─────────────────────────────────────────────────────────────
+// ── System Prompts ───────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a world-class prompt engineer. When given a task description, you produce a comprehensive, structured AI prompt.
+const CLASSIFY_PROMPT = `You are a prompt complexity classifier. Given a task description, determine whether it requires a simple, standard, or complex prompt structure.
+
+- simple: Creative, conversational, or single-step tasks (e.g. "write a haiku", "draft an email", "explain X simply")
+- standard: Tasks with moderate constraints, structure, or domain context (e.g. "write SEO product copy", "summarize with key takeaways", "create a lesson plan")
+- complex: Agentic, multi-step, or heavily constrained tasks (e.g. "build a code review agent", "create a data pipeline prompt with retry logic", "design a multi-turn tutoring system")
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose. Just the JSON object.
+
+{"tier": "simple" | "standard" | "complex"}`;
+
+const SYSTEM_PROMPT_SIMPLE = `You are a world-class prompt engineer. When given a task description, you produce a focused, concise AI prompt.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 4 string fields (all values must be strings, not nested objects or arrays):
+
+{
+  "role": "1-2 sentences defining the AI's identity and primary mission",
+  "instructions": "Clear directives covering tone, format, and key constraints",
+  "outputFormat": "What the output should look like — length, style, structure",
+  "assembled": "The COMPLETE, copy-paste-ready prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Output Format"
+}`;
+
+const SYSTEM_PROMPT_STANDARD = `You are a world-class prompt engineer. When given a task description, you produce a structured AI prompt with appropriate depth.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 6 string fields (all values must be strings, not nested objects or arrays):
+
+{
+  "role": "2-3 sentences defining the AI's identity, expertise level, and primary mission",
+  "instructions": "Numbered directives using strong action verbs. Cover tone, format, constraints, edge cases, and what NOT to do.",
+  "context": "Background information, domain knowledge, and situational context that grounds and constrains the AI's responses",
+  "outputFormat": "Explicit output contract — exact schema, field names, length, style, sections, and an example skeleton if helpful",
+  "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output",
+  "assembled": "The COMPLETE, copy-paste-ready master prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Context, ## Output Format, ## Reasoning Steps"
+}`;
+
+const SYSTEM_PROMPT_COMPLEX = `You are a world-class prompt engineer. When given a task description, you produce a comprehensive, structured AI prompt.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
@@ -38,6 +77,12 @@ Return an object with exactly these 8 string fields (all values must be strings,
   "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt",
   "assembled": "The COMPLETE, copy-paste-ready master prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Context, ## Output Format, ## Reasoning Steps, ## Examples, ## Remember"
 }`;
+
+const TEMPLATE_MAP = {
+  simple:   SYSTEM_PROMPT_SIMPLE,
+  standard: SYSTEM_PROMPT_STANDARD,
+  complex:  SYSTEM_PROMPT_COMPLEX,
+};
 
 // ── JSON extraction ───────────────────────────────────────────────────────────
 
@@ -55,6 +100,43 @@ function extractJSON(text) {
   return text.trim();
 }
 
+// ── Config Migration ─────────────────────────────────────────────────────────
+
+const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+
+const DEFAULT_SEND_TARGETS = [
+  { name: 'Claude',  url: 'https://claude.ai/new' },
+  { name: 'ChatGPT', url: 'https://chatgpt.com' },
+  { name: 'Gemini',  url: 'https://gemini.google.com/app' },
+];
+
+function migrateConfig() {
+  if (store.get('configMigrated')) return;
+
+  const oldProvider = store.get('provider', 'anthropic');
+  const oldModel    = store.get('model', DEFAULT_ANTHROPIC_MODEL);
+
+  for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+    if (!store.get(`${slot}.provider`)) {
+      store.set(`${slot}.provider`, oldProvider);
+      store.set(`${slot}.model`, slot === 'classify' ? DEFAULT_ANTHROPIC_MODEL : oldModel);
+    }
+  }
+
+  if (!store.get('sendTargets')) {
+    store.set('sendTargets', DEFAULT_SEND_TARGETS);
+  }
+
+  if (!store.get('history')) {
+    store.set('history', []);
+  }
+
+  store.delete('provider');
+  store.delete('model');
+
+  store.set('configMigrated', true);
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -63,7 +145,7 @@ function createWindow() {
     height: 320,
     show: false,
     frame: false,
-    resizable: false,
+    resizable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     transparent: false,
@@ -126,6 +208,8 @@ app.whenReady().then(() => {
   // Hide from macOS dock (no-op on Windows, harmless)
   if (app.dock) app.dock.hide();
 
+  migrateConfig();
+
   createWindow();
 
   // Tray icon
@@ -157,58 +241,143 @@ app.whenReady().then(() => {
     tray.popUpContextMenu(menu);
   });
 
+  // ── Provider call helper ──────────────────────────────────────────────────
+
+  async function callProvider(provider, model, apiKey, ollamaUrl, ollamaApiKey, systemPrompt, userMessage, maxTokens = 4096) {
+    if (provider === 'ollama') {
+      const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
+      const headers = { 'Content-Type': 'application/json' };
+      if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
+
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Ollama ${res.status}: ${body}`);
+      }
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('Ollama returned no content');
+      return content;
+    }
+
+    // Anthropic path — use fetch directly (same pattern as Ollama)
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_ANTHROPIC_MODEL,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Anthropic ${res.status}: ${body}`);
+    }
+    const data = await res.json();
+    const textBlock = (data.content || []).find((b) => b.type === 'text');
+    if (!textBlock?.text) throw new Error('Anthropic returned no text content');
+    return textBlock.text;
+  }
+
+  /** Resolve credentials for a given slot. */
+  function getSlotCredentials(slot) {
+    const provider = store.get(`${slot}.provider`, 'anthropic');
+    const model    = store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL);
+    const apiKey   = (() => {
+      const stored      = store.get('apiKey', '');
+      const isEncrypted = store.get('apiKeyEncrypted', false);
+      if (!stored) return '';
+      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+      }
+      return stored;
+    })();
+    const ollamaUrl = store.get('ollamaUrl', 'http://localhost:11434');
+    const ollamaApiKey = (() => {
+      const stored      = store.get('ollamaApiKey', '');
+      const isEncrypted = store.get('ollamaApiKeyEncrypted', false);
+      if (!stored) return '';
+      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+      }
+      return stored;
+    })();
+    return { provider, model, apiKey, ollamaUrl, ollamaApiKey };
+  }
+
   // ── IPC Handlers ───────────────────────────────────────────────────────────
 
-  // Generate a structured prompt via Anthropic or Ollama
-  ipcMain.handle('generate-prompt', async (_event, { task, apiKey, model, provider = 'anthropic', ollamaUrl = '', ollamaApiKey = '' }) => {
+  // Generate a structured prompt — classify-then-generate two-call flow
+  ipcMain.handle('generate-prompt', async (_event, { task, tier: explicitTier }) => {
     try {
-      let textContent;
+      let tier = explicitTier;
+      let classifyCreds = null;
 
-      if (provider === 'ollama') {
-        const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
-        const headers = { 'Content-Type': 'application/json' };
-        if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
-
-        const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: `Generate a perfect AI prompt for this task: ${task}` },
-            ],
-            stream: false,
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.text().catch(() => '');
-          throw new Error(`Ollama ${res.status}: ${body}`);
+      // Step 1: Classify (unless tier was provided by the user)
+      if (!tier) {
+        classifyCreds = getSlotCredentials('classify');
+        try {
+          const classifyText = await callProvider(
+            classifyCreds.provider, classifyCreds.model,
+            classifyCreds.apiKey, classifyCreds.ollamaUrl, classifyCreds.ollamaApiKey,
+            CLASSIFY_PROMPT,
+            `Classify this task: ${task}`,
+            50,
+          );
+          const classifyJson = JSON.parse(extractJSON(classifyText));
+          if (['simple', 'standard', 'complex'].includes(classifyJson.tier)) {
+            tier = classifyJson.tier;
+          } else {
+            tier = 'standard';
+          }
+        } catch (err) {
+          console.error('[classify] fallback to standard:', err.message);
+          tier = 'standard';
         }
-        const data = await res.json();
-        textContent = data.choices?.[0]?.message?.content;
-        if (!textContent) throw new Error('Ollama returned no content');
-      } else {
-        // Dynamic import handles both ESM and CJS builds of the SDK
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client = new Anthropic({ apiKey });
-
-        const response = await client.messages.create({
-          model: model || 'claude-haiku-4-5-20251001',
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: `Generate a perfect AI prompt for this task: ${task}` }],
-        });
-
-        // Find the text block by type — don't assume content[0] is always text
-        const textBlock = response.content.find((b) => b.type === 'text');
-        if (!textBlock?.text) throw new Error('Anthropic returned no text content — the model may have stopped early');
-        textContent = textBlock.text;
       }
+
+      // Step 2: Generate with the matching template
+      const genSlot = (tier === 'complex') ? 'generateComplex' : 'generateSimple';
+      const genCreds = getSlotCredentials(genSlot);
+      const systemPrompt = TEMPLATE_MAP[tier];
+
+      const textContent = await callProvider(
+        genCreds.provider, genCreds.model,
+        genCreds.apiKey, genCreds.ollamaUrl, genCreds.ollamaApiKey,
+        systemPrompt,
+        `Generate a perfect AI prompt for this task: ${task}`,
+        4096,
+      );
 
       const jsonText = extractJSON(textContent);
       const parsed   = JSON.parse(jsonText);
-      return { success: true, data: parsed };
+
+      return {
+        success: true,
+        data: parsed,
+        tier,
+        classifyProvider: classifyCreds?.provider || null,
+        classifyModel: classifyCreds?.model || null,
+        generateProvider: genCreds.provider,
+        generateModel: genCreds.model,
+      };
     } catch (err) {
       console.error('[generate-prompt] error:', err);
       return { success: false, error: err.message || String(err) };
@@ -226,6 +395,38 @@ app.whenReady().then(() => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const models = (data.models || []).map((m) => m.name).filter(Boolean).sort();
+      return { success: true, models };
+    } catch (err) {
+      return { success: false, error: err.message || String(err) };
+    }
+  });
+
+  // Fetch available models from Anthropic API
+  ipcMain.handle('fetch-anthropic-models', async () => {
+    try {
+      // Decrypt the stored API key
+      const stored      = store.get('apiKey', '');
+      const isEncrypted = store.get('apiKeyEncrypted', false);
+      let apiKey = '';
+      if (stored && isEncrypted && safeStorage.isEncryptionAvailable()) {
+        try { apiKey = safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { /* */ }
+      } else {
+        apiKey = stored;
+      }
+      if (!apiKey) return { success: true, models: [] };
+
+      const res = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'anthropic-version': '2023-06-01',
+          'x-api-key': apiKey,
+        },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const models = (data.data || [])
+        .map((m) => m.id)
+        .filter(Boolean)
+        .sort();
       return { success: true, models };
     } catch (err) {
       return { success: false, error: err.message || String(err) };
@@ -266,25 +467,11 @@ app.whenReady().then(() => {
     return stored; // plaintext fallback path
   });
 
-  // Persist selected model (plain string, not sensitive)
-  ipcMain.handle('save-model', (_event, model) => {
-    store.set('model', model);
-    return true;
-  });
-
-  ipcMain.handle('get-model', () => {
-    return store.get('model', 'claude-haiku-4-5-20251001');
-  });
-
   // Write text to the system clipboard
   ipcMain.handle('copy-to-clipboard', (_event, text) => {
     clipboard.writeText(text);
     return true;
   });
-
-  // Provider selection
-  ipcMain.handle('save-provider', (_event, provider) => { store.set('provider', provider); return true; });
-  ipcMain.handle('get-provider',  () => store.get('provider', 'anthropic'));
 
   // Ollama configuration
   ipcMain.handle('save-ollama-url', (_event, url) => { store.set('ollamaUrl', url); return true; });
@@ -315,8 +502,75 @@ app.whenReady().then(() => {
     return stored;
   });
 
-  ipcMain.handle('save-ollama-model', (_event, model) => { store.set('ollamaModel', model); return true; });
-  ipcMain.handle('get-ollama-model',  () => store.get('ollamaModel', ''));
+  // ── Slot config ─────────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-slot-config', () => {
+    return {
+      classify: {
+        provider: store.get('classify.provider', 'anthropic'),
+        model:    store.get('classify.model', DEFAULT_ANTHROPIC_MODEL),
+      },
+      generateSimple: {
+        provider: store.get('generateSimple.provider', 'anthropic'),
+        model:    store.get('generateSimple.model', DEFAULT_ANTHROPIC_MODEL),
+      },
+      generateComplex: {
+        provider: store.get('generateComplex.provider', 'anthropic'),
+        model:    store.get('generateComplex.model', DEFAULT_ANTHROPIC_MODEL),
+      },
+      ollamaUrl: store.get('ollamaUrl', 'http://localhost:11434'),
+    };
+  });
+
+  ipcMain.handle('save-slot-config', (_event, config) => {
+    for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+      if (config[slot]) {
+        store.set(`${slot}.provider`, config[slot].provider);
+        store.set(`${slot}.model`, config[slot].model);
+      }
+    }
+    if (config.ollamaUrl !== undefined) {
+      store.set('ollamaUrl', config.ollamaUrl);
+    }
+    return true;
+  });
+
+  // ── Send targets ────────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-send-targets', () => {
+    return store.get('sendTargets', DEFAULT_SEND_TARGETS);
+  });
+
+  ipcMain.handle('save-send-targets', (_event, targets) => {
+    store.set('sendTargets', targets);
+    return true;
+  });
+
+  ipcMain.handle('open-external-url', (_event, url) => {
+    shell.openExternal(url);
+    return true;
+  });
+
+  // ── Prompt history ──────────────────────────────────────────────────────────
+
+  const HISTORY_MAX = 50;
+
+  ipcMain.handle('get-history', () => {
+    return store.get('history', []);
+  });
+
+  ipcMain.handle('save-history-entry', (_event, entry) => {
+    const history = store.get('history', []);
+    history.unshift(entry);
+    if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+    store.set('history', history);
+    return true;
+  });
+
+  ipcMain.handle('clear-history', () => {
+    store.set('history', []);
+    return true;
+  });
 
   // Window chrome controls
   ipcMain.handle('close-window',    () => win.hide());
