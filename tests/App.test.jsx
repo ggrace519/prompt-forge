@@ -64,6 +64,7 @@ function setupDefaultMocks() {
 beforeEach(() => {
   vi.clearAllMocks();
   setupDefaultMocks();
+  document.documentElement.classList.remove('light');
 });
 
 

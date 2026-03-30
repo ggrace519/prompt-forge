@@ -20,7 +20,7 @@ const FALLBACK_ANTHROPIC_MODELS = [
 
 const TIER_COLORS = {
   simple:   { bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.3)', text: '#4ade80' },
-  standard: { bg: 'rgba(124, 106, 247, 0.12)', border: 'rgba(124, 106, 247, 0.3)', text: '#7c6af7' },
+  standard: { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', text: '#f59e0b' },
   complex:  { bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.3)', text: '#fbbf24' },
 };
 
