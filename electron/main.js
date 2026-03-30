@@ -199,6 +199,12 @@ function toggleWindow() {
   win.isVisible() ? win.hide() : showWindow();
 }
 
+// ── Sync IPC (must be registered before any window loads) ────────────────────
+
+ipcMain.on('get-theme-sync', (event) => {
+  event.returnValue = store.get('theme', 'dark');
+});
+
 // ── App ready ─────────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
@@ -671,10 +677,6 @@ app.whenReady().then(() => {
   });
 
   // ── Theme ──────────────────────────────────────────────────────────────────
-  ipcMain.on('get-theme-sync', (event) => {
-    event.returnValue = store.get('theme', 'dark');
-  });
-
   ipcMain.handle('get-theme', () => store.get('theme', 'dark'));
 
   ipcMain.handle('save-theme', (_event, theme) => {

@@ -3,9 +3,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Apply saved theme class before first paint to prevent flash
-const savedTheme = ipcRenderer.sendSync('get-theme-sync');
-if (savedTheme === 'light') {
-  document.documentElement.classList.add('light');
+try {
+  const savedTheme = ipcRenderer.sendSync('get-theme-sync');
+  if (savedTheme === 'light') {
+    document.documentElement.classList.add('light');
+  }
+} catch {
+  // Handler not yet registered — fall through to dark (the default)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
