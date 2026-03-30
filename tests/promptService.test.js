@@ -165,6 +165,25 @@ describe('saveApiKey / getApiKey', () => {
   });
 });
 
+// ── Theme ────────────────────────────────────────────────────────────────────
+
+describe('getTheme', () => {
+  it('returns stored theme from IPC', async () => {
+    mockIPC.getTheme = vi.fn().mockResolvedValue('light');
+    const result = await promptService.getTheme();
+    expect(result).toBe('light');
+  });
+});
+
+describe('saveTheme', () => {
+  it('calls saveTheme on IPC bridge', async () => {
+    mockIPC.saveTheme = vi.fn().mockResolvedValue(true);
+    const result = await promptService.saveTheme('dark');
+    expect(mockIPC.saveTheme).toHaveBeenCalledWith('dark');
+    expect(result).toBe(true);
+  });
+});
+
 // ── IPC bridge unavailable ────────────────────────────────────────────────────
 
 describe('when electronAPI is not present', () => {
