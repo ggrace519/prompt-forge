@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractJSON } from '../src/lib/utils.js';
+import { extractJSON, parseModelJSON } from '../src/lib/utils.js';
 
 // ── Happy paths ───────────────────────────────────────────────────────────────
 
@@ -20,6 +20,22 @@ describe('extractJSON — raw JSON', () => {
     const obj = { outer: { inner: 'value' } };
     const parsed = JSON.parse(extractJSON(JSON.stringify(obj)));
     expect(parsed.outer.inner).toBe('value');
+  });
+});
+
+describe('parseModelJSON', () => {
+  it('parses fenced JSON with raw newlines inside string values', () => {
+    const raw = '```json\n{"instructions":"line 1\nline 2","role":"writer"}\n```';
+    const parsed = parseModelJSON(raw);
+    expect(parsed.instructions).toBe('line 1\nline 2');
+    expect(parsed.role).toBe('writer');
+  });
+
+  it('repairs unescaped quotes inside a string value', () => {
+    const raw = '{"outputFormat":"Return fields named "title" and "summary".","role":"editor"}';
+    const parsed = parseModelJSON(raw);
+    expect(parsed.outputFormat).toBe('Return fields named "title" and "summary".');
+    expect(parsed.role).toBe('editor');
   });
 });
 

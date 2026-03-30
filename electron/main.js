@@ -363,29 +363,80 @@ app.whenReady().then(() => {
         `Generate a perfect AI prompt for this task: ${task}`,
       );
 
-      // Parse JSON from model response, fixing literal newlines inside string values.
-      // Models output multi-line content in JSON strings without escaping newlines.
-      // We walk the string char-by-char: outside quotes, leave whitespace alone;
-      // inside quotes, escape control characters so JSON.parse can handle them.
+      // Parse JSON from model response, repairing common LLM JSON mistakes inside
+      // string values: raw control characters and unescaped quote characters.
       function parseModelJSON(text) {
-        const t = text.trim();
-        const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/);
-        const raw = fenced ? fenced[1].trim() : t;
+        const raw = extractJSON(text);
 
         const chars = [];
         let inString = false;
         let escaped = false;
+
+        function nextSignificantChar(source, index) {
+          for (let i = index + 1; i < source.length; i++) {
+            const ch = source[i];
+            if (!/\s/.test(ch)) return ch;
+          }
+          return '';
+        }
+
         for (let i = 0; i < raw.length; i++) {
           const ch = raw[i];
           if (escaped) { chars.push(ch); escaped = false; continue; }
           if (ch === '\\' && inString) { chars.push(ch); escaped = true; continue; }
-          if (ch === '"') { inString = !inString; chars.push(ch); continue; }
+          if (ch === '"') {
+            if (!inString) {
+              inString = true;
+              chars.push(ch);
+              continue;
+            }
+
+            const next = nextSignificantChar(raw, i);
+            const isStringTerminator = next === ',' || next === '}' || next === ']' || next === ':';
+            if (isStringTerminator) {
+              inString = false;
+              chars.push(ch);
+            } else {
+              chars.push('\\"');
+            }
+            continue;
+          }
           if (inString && ch === '\n') { chars.push('\\n'); continue; }
           if (inString && ch === '\r') { continue; }
           if (inString && ch === '\t') { chars.push('\\t'); continue; }
           chars.push(ch);
         }
-        return JSON.parse(chars.join(''));
+        const result = chars.join('');
+        try {
+          return JSON.parse(result);
+        } catch {
+          // Model likely stopped mid-string. Attempt to repair by closing
+          // any open string value and unclosed braces/brackets.
+          let repaired = result;
+          // If we're inside a string (odd number of unescaped quotes), close it
+          let quoteCount = 0;
+          let esc = false;
+          for (const c of repaired) {
+            if (esc) { esc = false; continue; }
+            if (c === '\\') { esc = true; continue; }
+            if (c === '"') quoteCount++;
+          }
+          if (quoteCount % 2 !== 0) repaired += '"';
+          // Close any open braces/brackets
+          let depth = 0;
+          esc = false;
+          let inStr = false;
+          for (const c of repaired) {
+            if (esc) { esc = false; continue; }
+            if (c === '\\') { esc = true; continue; }
+            if (c === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (c === '{' || c === '[') depth++;
+            if (c === '}' || c === ']') depth--;
+          }
+          for (let d = 0; d < depth; d++) repaired += '}';
+          return JSON.parse(repaired);
+        }
       }
 
       const parsed = parseModelJSON(textContent);

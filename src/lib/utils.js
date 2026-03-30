@@ -32,3 +32,77 @@ export function extractJSON(text) {
 
   return text.trim();
 }
+
+/**
+ * Parse model-emitted JSON that may contain raw control characters or
+ * unescaped quotes inside string values.
+ *
+ * @param {string | null | undefined} text
+ * @returns {any}
+ */
+export function parseModelJSON(text) {
+  const raw = extractJSON(text);
+  const chars = [];
+  let inString = false;
+  let escaped = false;
+
+  const nextSignificantChar = (source, index) => {
+    for (let i = index + 1; i < source.length; i++) {
+      const ch = source[i];
+      if (!/\s/.test(ch)) return ch;
+    }
+    return '';
+  };
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (escaped) {
+      chars.push(ch);
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      chars.push(ch);
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      if (!inString) {
+        inString = true;
+        chars.push(ch);
+        continue;
+      }
+
+      const next = nextSignificantChar(raw, i);
+      const isStringTerminator = next === ',' || next === '}' || next === ']' || next === ':';
+      if (isStringTerminator) {
+        inString = false;
+        chars.push(ch);
+      } else {
+        chars.push('\\"');
+      }
+      continue;
+    }
+
+    if (inString && ch === '\n') {
+      chars.push('\\n');
+      continue;
+    }
+
+    if (inString && ch === '\r') {
+      continue;
+    }
+
+    if (inString && ch === '\t') {
+      chars.push('\\t');
+      continue;
+    }
+
+    chars.push(ch);
+  }
+
+  return JSON.parse(chars.join(''));
+}

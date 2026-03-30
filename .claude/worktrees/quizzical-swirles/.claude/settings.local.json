@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/coding-projects/prompt-forge-pro/**)",
+      "Bash(npm test:*)",
+      "Bash(GIT_SSH_COMMAND=\"ssh -4\" git push origin main)",
+      "Bash(node -c electron/main.js)"
+    ]
+  }
+}
