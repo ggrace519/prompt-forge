@@ -37,35 +37,33 @@ const SYSTEM_PROMPT_SIMPLE = `You are a world-class prompt engineer. When given 
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
-Return an object with exactly these 4 string fields (all values must be strings, not nested objects or arrays):
+Return an object with exactly these 3 string fields (all values must be strings, not nested objects or arrays):
 
 {
   "role": "1-2 sentences defining the AI's identity and primary mission",
   "instructions": "Clear directives covering tone, format, and key constraints",
-  "outputFormat": "What the output should look like — length, style, structure",
-  "assembled": "The COMPLETE, copy-paste-ready prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Output Format"
+  "outputFormat": "What the output should look like — length, style, structure"
 }`;
 
 const SYSTEM_PROMPT_STANDARD = `You are a world-class prompt engineer. When given a task description, you produce a structured AI prompt with appropriate depth.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
-Return an object with exactly these 6 string fields (all values must be strings, not nested objects or arrays):
+Return an object with exactly these 5 string fields (all values must be strings, not nested objects or arrays):
 
 {
   "role": "2-3 sentences defining the AI's identity, expertise level, and primary mission",
   "instructions": "Numbered directives using strong action verbs. Cover tone, format, constraints, edge cases, and what NOT to do.",
   "context": "Background information, domain knowledge, and situational context that grounds and constrains the AI's responses",
   "outputFormat": "Explicit output contract — exact schema, field names, length, style, sections, and an example skeleton if helpful",
-  "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output",
-  "assembled": "The COMPLETE, copy-paste-ready master prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Context, ## Output Format, ## Reasoning Steps"
+  "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output"
 }`;
 
 const SYSTEM_PROMPT_COMPLEX = `You are a world-class prompt engineer. When given a task description, you produce a comprehensive, structured AI prompt.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
-Return an object with exactly these 8 string fields (all values must be strings, not nested objects or arrays):
+Return an object with exactly these 7 string fields (all values must be strings, not nested objects or arrays):
 
 {
   "role": "2-3 sentences defining the AI's identity, expertise level, and primary mission",
@@ -74,8 +72,7 @@ Return an object with exactly these 8 string fields (all values must be strings,
   "outputFormat": "Explicit output contract — exact schema, field names, length, style, sections, and an example skeleton if helpful",
   "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output",
   "examples": "1-2 concrete few-shot examples showing ideal input → output pairs, formatted clearly",
-  "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt",
-  "assembled": "The COMPLETE, copy-paste-ready master prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Context, ## Output Format, ## Reasoning Steps, ## Examples, ## Remember"
+  "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt"
 }`;
 
 const TEMPLATE_MAP = {
@@ -291,6 +288,9 @@ app.whenReady().then(() => {
       throw new Error(`Anthropic ${res.status}: ${body}`);
     }
     const data = await res.json();
+    if (data.stop_reason === 'max_tokens') {
+      console.error('[callProvider] Response truncated — hit max_tokens limit');
+    }
     const textBlock = (data.content || []).find((b) => b.type === 'text');
     if (!textBlock?.text) throw new Error('Anthropic returned no text content');
     return textBlock.text;
@@ -363,11 +363,25 @@ app.whenReady().then(() => {
         genCreds.apiKey, genCreds.ollamaUrl, genCreds.ollamaApiKey,
         systemPrompt,
         `Generate a perfect AI prompt for this task: ${task}`,
-        4096,
       );
 
       const jsonText = extractJSON(textContent);
       const parsed   = JSON.parse(jsonText);
+
+      // Build the assembled prompt from individual fields
+      const sectionMap = [
+        ['role',          '## Role'],
+        ['instructions',  '## Instructions'],
+        ['context',       '## Context'],
+        ['outputFormat',  '## Output Format'],
+        ['reasoning',     '## Reasoning Steps'],
+        ['examples',      '## Examples'],
+        ['reinforcement', '## Remember'],
+      ];
+      parsed.assembled = sectionMap
+        .filter(([key]) => parsed[key]?.trim())
+        .map(([key, header]) => `${header}\n\n${parsed[key].trim()}`)
+        .join('\n\n');
 
       return {
         success: true,
