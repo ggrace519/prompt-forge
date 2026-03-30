@@ -288,9 +288,7 @@ app.whenReady().then(() => {
       throw new Error(`Anthropic ${res.status}: ${body}`);
     }
     const data = await res.json();
-    if (data.stop_reason === 'max_tokens') {
-      console.error('[callProvider] Response truncated — hit max_tokens limit');
-    }
+    console.log('[callProvider] stop_reason:', data.stop_reason, 'usage:', JSON.stringify(data.usage));
     const textBlock = (data.content || []).find((b) => b.type === 'text');
     if (!textBlock?.text) throw new Error('Anthropic returned no text content');
     return textBlock.text;
@@ -365,38 +363,23 @@ app.whenReady().then(() => {
         `Generate a perfect AI prompt for this task: ${task}`,
       );
 
-      // Try parsing the response as JSON directly, then fall back to extraction
-      let parsed;
-      const trimmed = textContent.trim();
-      try {
-        // Case 1: raw JSON (most common with our instructions)
-        parsed = JSON.parse(trimmed);
-      } catch {
-        // Case 2: markdown fences
-        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (fenced) {
-          parsed = JSON.parse(fenced[1].trim());
-        } else {
-          // Case 3: JSON with leading/trailing prose — find matching braces properly
-          const start = trimmed.indexOf('{');
-          if (start === -1) throw new Error('No JSON object found in response');
-          let depth = 0;
-          let inString = false;
-          let escaped = false;
-          let end = -1;
-          for (let i = start; i < trimmed.length; i++) {
-            const ch = trimmed[i];
-            if (escaped) { escaped = false; continue; }
-            if (ch === '\\') { escaped = true; continue; }
-            if (ch === '"') { inString = !inString; continue; }
-            if (inString) continue;
-            if (ch === '{') depth++;
-            if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
-          }
-          if (end === -1) throw new Error('Unterminated JSON object in response');
-          parsed = JSON.parse(trimmed.slice(start, end + 1));
-        }
+      // Parse the JSON response — models often include literal newlines in strings
+      function parseModelJSON(text) {
+        const t = text.trim();
+        // Strip markdown fences if present
+        const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+        const raw = fenced ? fenced[1].trim() : t;
+        // Fix unescaped control characters inside JSON string values
+        const fixed = raw.replace(/[\x00-\x1f]/g, (ch) => {
+          if (ch === '\n') return '\\n';
+          if (ch === '\r') return '\\r';
+          if (ch === '\t') return '\\t';
+          return '';
+        });
+        return JSON.parse(fixed);
       }
+
+      const parsed = parseModelJSON(textContent);
 
       // Build the assembled prompt from individual fields
       const sectionMap = [
