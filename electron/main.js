@@ -363,20 +363,29 @@ app.whenReady().then(() => {
         `Generate a perfect AI prompt for this task: ${task}`,
       );
 
-      // Parse the JSON response — models often include literal newlines in strings
+      // Parse JSON from model response, fixing literal newlines inside string values.
+      // Models output multi-line content in JSON strings without escaping newlines.
+      // We walk the string char-by-char: outside quotes, leave whitespace alone;
+      // inside quotes, escape control characters so JSON.parse can handle them.
       function parseModelJSON(text) {
         const t = text.trim();
-        // Strip markdown fences if present
         const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/);
         const raw = fenced ? fenced[1].trim() : t;
-        // Fix unescaped control characters inside JSON string values
-        const fixed = raw.replace(/[\x00-\x1f]/g, (ch) => {
-          if (ch === '\n') return '\\n';
-          if (ch === '\r') return '\\r';
-          if (ch === '\t') return '\\t';
-          return '';
-        });
-        return JSON.parse(fixed);
+
+        const chars = [];
+        let inString = false;
+        let escaped = false;
+        for (let i = 0; i < raw.length; i++) {
+          const ch = raw[i];
+          if (escaped) { chars.push(ch); escaped = false; continue; }
+          if (ch === '\\' && inString) { chars.push(ch); escaped = true; continue; }
+          if (ch === '"') { inString = !inString; chars.push(ch); continue; }
+          if (inString && ch === '\n') { chars.push('\\n'); continue; }
+          if (inString && ch === '\r') { continue; }
+          if (inString && ch === '\t') { chars.push('\\t'); continue; }
+          chars.push(ch);
+        }
+        return JSON.parse(chars.join(''));
       }
 
       const parsed = parseModelJSON(textContent);
