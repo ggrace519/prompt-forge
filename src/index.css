@@ -28,6 +28,77 @@
   --transition:    0.12s ease;
 }
 
+html.light {
+  --bg:            #f8f8f8;
+  --surface:       rgba(255, 255, 255, 0.7);
+  --surface-2:     rgba(255, 255, 255, 0.5);
+  --surface-3:     rgba(255, 255, 255, 0.35);
+  --border:        rgba(0, 0, 0, 0.08);
+  --border-focus:  rgba(0, 0, 0, 0.14);
+  --accent:        #f59e0b;
+  --accent-hover:  #ea580c;
+  --accent-active: #d97706;
+  --accent-dim:    rgba(245, 158, 11, 0.10);
+  --accent-glow:   rgba(245, 158, 11, 0.15);
+  --text:          #1a1a1a;
+  --text-muted:    #666666;
+  --text-dim:      #999999;
+  --success:       #16a34a;
+  --error:         #dc2626;
+  --error-dim:     rgba(220, 38, 38, 0.08);
+  --error-border:  rgba(220, 38, 38, 0.2);
+}
+
+html.light .top-bar,
+html.light .settings-topbar,
+html.light .tab-bar,
+html.light .card-header,
+html.light .history-header,
+html.light .assembled-actions {
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+html.light .select-input option,
+html.light .override-select option {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+html.light .btn-copy.copied {
+  color: var(--success);
+  border-color: rgba(22, 163, 74, 0.3);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+html.light .tier-simple {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  border-color: rgba(22, 163, 74, 0.25);
+}
+
+html.light .tier-standard {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+  border-color: rgba(217, 119, 6, 0.25);
+}
+
+html.light .tier-complex {
+  color: #b45309;
+  background: rgba(180, 83, 9, 0.1);
+  border-color: rgba(180, 83, 9, 0.25);
+}
+
+html.light .tier-dot.tier-simple   { background: #16a34a; }
+html.light .tier-dot.tier-standard { background: #d97706; }
+html.light .tier-dot.tier-complex  { background: #b45309; }
+
+html.light .toast {
+  background: #ffffff;
+  color: #1a1a1a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -928,7 +999,7 @@ button, label, span, h1, p {
 .tier-standard {
   color: var(--accent);
   background: var(--accent-dim);
-  border-color: rgba(124, 106, 247, 0.3);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .tier-complex {
