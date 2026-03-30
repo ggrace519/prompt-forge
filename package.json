@@ -43,7 +43,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "PromptForge"
+      "shortcutName": "PromptForge",
+      "license": "LICENSE"
     },
     "extraMetadata": {
       "main": "electron/main.js"
