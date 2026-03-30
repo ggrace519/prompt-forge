@@ -271,18 +271,27 @@ app.whenReady().then(() => {
       return content;
     }
 
-    // Anthropic path
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey });
-
-    const response = await client.messages.create({
-      model: model || DEFAULT_ANTHROPIC_MODEL,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+    // Anthropic path — use fetch directly (same pattern as Ollama)
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_ANTHROPIC_MODEL,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
     });
-
-    const textBlock = response.content.find((b) => b.type === 'text');
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Anthropic ${res.status}: ${body}`);
+    }
+    const data = await res.json();
+    const textBlock = (data.content || []).find((b) => b.type === 'text');
     if (!textBlock?.text) throw new Error('Anthropic returned no text content');
     return textBlock.text;
   }
