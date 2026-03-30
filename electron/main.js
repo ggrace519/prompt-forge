@@ -669,6 +669,18 @@ app.whenReady().then(() => {
     const { x, y } = getWindowPosition();
     win.setPosition(x, y, false);
   });
+
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  ipcMain.on('get-theme-sync', (event) => {
+    event.returnValue = store.get('theme', 'dark');
+  });
+
+  ipcMain.handle('get-theme', () => store.get('theme', 'dark'));
+
+  ipcMain.handle('save-theme', (_event, theme) => {
+    store.set('theme', theme);
+    return true;
+  });
 });
 
 // Keep the process alive when the popup window is hidden
