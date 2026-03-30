@@ -283,6 +283,8 @@ export default function App() {
     <MainView
       slotConfig={slotConfig}
       setSlotConfig={setSlotConfig}
+      ollamaUrl={ollamaUrl}
+      ollamaApiKey={ollamaApiKey}
       sendTargets={sendTargets}
       history={history}
       setHistory={setHistory}
@@ -405,6 +407,15 @@ function SettingsView({
   const [newTargetUrl,  setNewTargetUrl]  = useState('');
 
   const [saving, setSaving] = useState(false);
+
+  // Auto-fetch Ollama models on mount if any slot uses Ollama
+  useEffect(() => {
+    const hasOllamaSlot = Object.values(slots).some((s) => s.provider === 'ollama');
+    if (hasOllamaSlot && serverUrl && ollamaModels.length === 0) {
+      handleFetchModels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleFetchModels() {
     setFetchingModels(true);
@@ -637,7 +648,7 @@ function SettingsView({
 
 // ── MainView ──────────────────────────────────────────────────────────────────
 
-function MainView({ slotConfig, setSlotConfig, sendTargets, history, setHistory, onOpenSettings }) {
+function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTargets, history, setHistory, onOpenSettings }) {
   const [task,         setTask]         = useState('');
   const [loading,      setLoading]      = useState(false);
   const [loadingStep,  setLoadingStep]  = useState('');
@@ -656,16 +667,12 @@ function MainView({ slotConfig, setSlotConfig, sendTargets, history, setHistory,
     const hasOllamaSlot = slotConfig && Object.values(slotConfig).some(
       (s) => s && s.provider === 'ollama'
     );
-    if (hasOllamaSlot) {
-      promptService.getOllamaUrl().then((url) => {
-        promptService.getOllamaApiKey().then((key) => {
-          promptService.fetchOllamaModels(url, key).then((result) => {
-            if (result.success) setOllamaModels(result.models);
-          });
-        });
+    if (hasOllamaSlot && ollamaUrl) {
+      promptService.fetchOllamaModels(ollamaUrl, ollamaApiKey || '').then((result) => {
+        if (result.success) setOllamaModels(result.models);
       });
     }
-  }, [slotConfig]);
+  }, [slotConfig, ollamaUrl, ollamaApiKey]);
 
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
