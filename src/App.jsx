@@ -20,7 +20,7 @@ const FALLBACK_ANTHROPIC_MODELS = [
 
 const TIER_COLORS = {
   simple:   { bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.3)', text: '#4ade80' },
-  standard: { bg: 'rgba(124, 106, 247, 0.12)', border: 'rgba(124, 106, 247, 0.3)', text: '#7c6af7' },
+  standard: { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', text: '#f59e0b' },
   complex:  { bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.3)', text: '#fbbf24' },
 };
 
@@ -170,6 +170,32 @@ function IconTrash() {
   );
 }
 
+function IconSun() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  );
+}
+
+function IconMoon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  );
+}
+
 // ── Shared components ─────────────────────────────────────────────────────────
 
 function WindowControls() {
@@ -213,6 +239,7 @@ export default function App() {
   const [ollamaApiKey, setOllamaApiKey] = useState('');
   const [sendTargets,  setSendTargets]  = useState([]);
   const [history,      setHistory]      = useState([]);
+  const [theme,        setTheme]        = useState('dark');
 
   useEffect(() => {
     Promise.all([
@@ -222,7 +249,8 @@ export default function App() {
       promptService.getOllamaApiKey(),
       promptService.getSendTargets(),
       promptService.getHistory(),
-    ]).then(([key, slots, oUrl, oKey, targets, hist]) => {
+      promptService.getTheme(),
+    ]).then(([key, slots, oUrl, oKey, targets, hist, savedTheme]) => {
       setApiKey(key || '');
       setSlotConfig(slots || {
         classify:       { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
@@ -233,6 +261,7 @@ export default function App() {
       setOllamaApiKey(oKey || '');
       setSendTargets(targets || []);
       setHistory(hist || []);
+      setTheme(savedTheme || 'dark');
 
       // Determine if we can go straight to main
       const hasAnthropicKey = !!key;
@@ -251,6 +280,13 @@ export default function App() {
     setSendTargets(config.sendTargets);
     setView('main');
   }, []);
+
+  const toggleTheme = useCallback(() => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.classList.toggle('light', next === 'light');
+    promptService.saveTheme(next);
+  }, [theme]);
 
   const canGoBack = !!apiKey || (slotConfig && Object.values(slotConfig).some(
     (s) => s.provider === 'ollama' && s.model
@@ -274,6 +310,8 @@ export default function App() {
         sendTargets={sendTargets}
         onSave={handleSettingsSaved}
         onBack={canGoBack ? () => setView('main') : null}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -288,6 +326,8 @@ export default function App() {
       history={history}
       setHistory={setHistory}
       onOpenSettings={() => setView('settings')}
+      theme={theme}
+      onToggleTheme={toggleTheme}
     />
   );
 }
@@ -345,6 +385,7 @@ function SettingsView({
   ollamaUrl: currentOllamaUrl, ollamaApiKey: currentOllamaApiKey,
   sendTargets: currentSendTargets,
   onSave, onBack,
+  theme, onToggleTheme,
 }) {
   const [key,           setKey]           = useState('');
   const [serverUrl,     setServerUrl]     = useState(currentOllamaUrl || 'http://localhost:11434');
@@ -456,6 +497,15 @@ function SettingsView({
           )}
         </div>
         <div className="settings-topbar-controls">
+          <button
+            className="icon-btn"
+            onClick={onToggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{ marginRight: 2 }}
+          >
+            {theme === 'dark' ? <IconSun /> : <IconMoon />}
+          </button>
           <WindowControls />
         </div>
       </div>
@@ -616,7 +666,7 @@ function SettingsView({
 
 // ── MainView ──────────────────────────────────────────────────────────────────
 
-function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTargets, history, setHistory, onOpenSettings }) {
+function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
   const [task,         setTask]         = useState('');
   const [loading,      setLoading]      = useState(false);
   const [loadingStep,  setLoadingStep]  = useState('');
@@ -731,6 +781,14 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
           </span>
         </div>
         <div className="top-bar-right">
+          <button
+            className="icon-btn"
+            onClick={onToggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? <IconSun /> : <IconMoon />}
+          </button>
           <button
             className="icon-btn"
             onClick={() => setShowHistory(!showHistory)}

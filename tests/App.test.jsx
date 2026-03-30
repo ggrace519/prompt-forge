@@ -29,6 +29,8 @@ vi.mock('../src/lib/promptService.js', () => ({
   getHistory:         vi.fn(),
   saveHistoryEntry:   vi.fn(),
   clearHistory:       vi.fn(),
+  getTheme:           vi.fn(),
+  saveTheme:          vi.fn(),
 }));
 
 import * as promptService from '../src/lib/promptService.js';
@@ -55,11 +57,14 @@ function setupDefaultMocks() {
     { name: 'Gemini', url: 'https://gemini.google.com/app' },
   ]);
   promptService.getHistory.mockResolvedValue([]);
+  promptService.getTheme.mockResolvedValue('dark');
+  promptService.saveTheme.mockResolvedValue(true);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   setupDefaultMocks();
+  document.documentElement.classList.remove('light');
 });
 
 
@@ -278,5 +283,47 @@ describe('App — Main view', () => {
       expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
     });
     expect(promptService.saveApiKey).not.toHaveBeenCalled();
+  });
+});
+
+// ── Theme toggle ─────────────────────────────────────────────────────────────
+
+describe('App — theme toggle', () => {
+  it('renders a theme toggle button in main view', async () => {
+    promptService.getApiKey.mockResolvedValue('sk-ant-real-key');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Switch to light mode')).toBeInTheDocument();
+    });
+  });
+
+  it('toggles theme class on html element when clicked', async () => {
+    promptService.getApiKey.mockResolvedValue('sk-ant-real-key');
+
+    render(<App />);
+
+    const toggle = await waitFor(() => screen.getByTitle('Switch to light mode'));
+    fireEvent.click(toggle);
+
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(promptService.saveTheme).toHaveBeenCalledWith('light');
+  });
+
+  it('toggles back to dark when clicked again', async () => {
+    promptService.getApiKey.mockResolvedValue('sk-ant-real-key');
+
+    render(<App />);
+
+    const toggle = await waitFor(() => screen.getByTitle('Switch to light mode'));
+    fireEvent.click(toggle);
+
+    // Now should show "Switch to dark mode"
+    const darkToggle = screen.getByTitle('Switch to dark mode');
+    fireEvent.click(darkToggle);
+
+    expect(document.documentElement.classList.contains('light')).toBe(false);
+    expect(promptService.saveTheme).toHaveBeenCalledWith('dark');
   });
 });

@@ -104,6 +104,16 @@ export async function clearHistory() {
   return getIPC().clearHistory();
 }
 
+// ── Theme ───────────────────────────────────────────────────────────────────
+
+export async function getTheme() {
+  return getIPC().getTheme();
+}
+
+export async function saveTheme(theme) {
+  return getIPC().saveTheme(theme);
+}
+
 // ── Window controls ─────────────────────────────────────────────────────────
 
 export async function closeWindow() {

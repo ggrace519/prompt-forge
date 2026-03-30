@@ -3,17 +3,17 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --bg:            #181818;
-  --surface:       #222222;
-  --surface-2:     #2a2a2a;
-  --surface-3:     #323232;
-  --border:        #2e2e2e;
-  --border-focus:  #3d3d3d;
-  --accent:        #7c6af7;
-  --accent-hover:  #6a59e6;
-  --accent-active: #5a4ad4;
-  --accent-dim:    rgba(124, 106, 247, 0.12);
-  --accent-glow:   rgba(124, 106, 247, 0.22);
+  --bg:            #141414;
+  --surface:       rgba(255, 255, 255, 0.04);
+  --surface-2:     rgba(255, 255, 255, 0.06);
+  --surface-3:     rgba(255, 255, 255, 0.10);
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-focus:  rgba(255, 255, 255, 0.14);
+  --accent:        #f59e0b;
+  --accent-hover:  #ea580c;
+  --accent-active: #d97706;
+  --accent-dim:    rgba(245, 158, 11, 0.12);
+  --accent-glow:   rgba(245, 158, 11, 0.25);
   --text:          #e2e2e2;
   --text-muted:    #808080;
   --text-dim:      #4a4a4a;
@@ -26,6 +26,77 @@
   --font-ui:       system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono:     'Consolas', 'Cascadia Code', 'Courier New', monospace;
   --transition:    0.12s ease;
+}
+
+html.light {
+  --bg:            #f8f8f8;
+  --surface:       rgba(255, 255, 255, 0.7);
+  --surface-2:     rgba(255, 255, 255, 0.5);
+  --surface-3:     rgba(255, 255, 255, 0.35);
+  --border:        rgba(0, 0, 0, 0.08);
+  --border-focus:  rgba(0, 0, 0, 0.14);
+  --accent:        #f59e0b;
+  --accent-hover:  #ea580c;
+  --accent-active: #d97706;
+  --accent-dim:    rgba(245, 158, 11, 0.10);
+  --accent-glow:   rgba(245, 158, 11, 0.15);
+  --text:          #1a1a1a;
+  --text-muted:    #666666;
+  --text-dim:      #999999;
+  --success:       #16a34a;
+  --error:         #dc2626;
+  --error-dim:     rgba(220, 38, 38, 0.08);
+  --error-border:  rgba(220, 38, 38, 0.2);
+}
+
+html.light .top-bar,
+html.light .settings-topbar,
+html.light .tab-bar,
+html.light .card-header,
+html.light .history-header,
+html.light .assembled-actions {
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+html.light .select-input option,
+html.light .override-select option {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+html.light .btn-copy.copied {
+  color: var(--success);
+  border-color: rgba(22, 163, 74, 0.3);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+html.light .tier-simple {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  border-color: rgba(22, 163, 74, 0.25);
+}
+
+html.light .tier-standard {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+  border-color: rgba(217, 119, 6, 0.25);
+}
+
+html.light .tier-complex {
+  color: #b45309;
+  background: rgba(180, 83, 9, 0.1);
+  border-color: rgba(180, 83, 9, 0.25);
+}
+
+html.light .tier-dot.tier-simple   { background: #16a34a; }
+html.light .tier-dot.tier-standard { background: #d97706; }
+html.light .tier-dot.tier-complex  { background: #b45309; }
+
+html.light .toast {
+  background: #ffffff;
+  color: #1a1a1a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 *, *::before, *::after {
@@ -47,6 +118,24 @@ body {
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ── Glassmorphism ─────────────────────────────────────────────────────────── */
+
+.top-bar,
+.settings-topbar,
+.tab-bar,
+.card-header,
+.history-header,
+.assembled-actions {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.text-input,
+.task-textarea {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 #root {
@@ -84,7 +173,7 @@ button, label, span, h1, p {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid var(--border);
   border-top-color: var(--accent);
   animation: spin 0.65s linear infinite;
 }
@@ -312,7 +401,7 @@ button, label, span, h1, p {
 }
 
 .select-input option {
-  background: var(--surface-2);
+  background: #1e1e1e;
   color: var(--text);
 }
 
@@ -365,20 +454,20 @@ button, label, span, h1, p {
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
   color: #ffffff;
-  border-color: var(--accent);
+  border-color: transparent;
 }
 
 .btn-primary:not(:disabled):hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  box-shadow: 0 2px 8px var(--accent-glow);
+  background: linear-gradient(135deg, #ea580c 0%, #d97706 100%);
+  border-color: transparent;
+  box-shadow: 0 2px 12px var(--accent-glow);
 }
 
 .btn-primary:not(:disabled):active {
   background: var(--accent-active);
-  border-color: var(--accent-active);
+  border-color: transparent;
   box-shadow: none;
 }
 
@@ -910,7 +999,7 @@ button, label, span, h1, p {
 .tier-standard {
   color: var(--accent);
   background: var(--accent-dim);
-  border-color: rgba(124, 106, 247, 0.3);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .tier-complex {
@@ -1049,7 +1138,7 @@ button, label, span, h1, p {
 .override-select:focus { border-color: var(--accent); }
 
 .override-select option {
-  background: var(--surface-2);
+  background: #1e1e1e;
   color: var(--text);
 }
 
