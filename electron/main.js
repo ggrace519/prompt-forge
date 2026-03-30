@@ -365,8 +365,38 @@ app.whenReady().then(() => {
         `Generate a perfect AI prompt for this task: ${task}`,
       );
 
-      const jsonText = extractJSON(textContent);
-      const parsed   = JSON.parse(jsonText);
+      // Try parsing the response as JSON directly, then fall back to extraction
+      let parsed;
+      const trimmed = textContent.trim();
+      try {
+        // Case 1: raw JSON (most common with our instructions)
+        parsed = JSON.parse(trimmed);
+      } catch {
+        // Case 2: markdown fences
+        const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fenced) {
+          parsed = JSON.parse(fenced[1].trim());
+        } else {
+          // Case 3: JSON with leading/trailing prose — find matching braces properly
+          const start = trimmed.indexOf('{');
+          if (start === -1) throw new Error('No JSON object found in response');
+          let depth = 0;
+          let inString = false;
+          let escaped = false;
+          let end = -1;
+          for (let i = start; i < trimmed.length; i++) {
+            const ch = trimmed[i];
+            if (escaped) { escaped = false; continue; }
+            if (ch === '\\') { escaped = true; continue; }
+            if (ch === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (ch === '{') depth++;
+            if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+          }
+          if (end === -1) throw new Error('Unterminated JSON object in response');
+          parsed = JSON.parse(trimmed.slice(start, end + 1));
+        }
+      }
 
       // Build the assembled prompt from individual fields
       const sectionMap = [
