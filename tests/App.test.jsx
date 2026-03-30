@@ -63,12 +63,12 @@ beforeEach(() => {
 
 // ── Initial routing ───────────────────────────────────────────────────────────
 
-describe.skip('App — initial routing', () => {
+describe('App — initial routing', () => {
   it('shows Settings view when no API key is stored', async () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('sk-ant-api03-…')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('sk-ant-api03-...')).toBeInTheDocument();
     });
   });
 
@@ -88,23 +88,27 @@ describe.skip('App — initial routing', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('sk-ant-api03-…')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('sk-ant-api03-...')).toBeInTheDocument();
     });
   });
 });
 
 // ── Settings → Main transition ────────────────────────────────────────────────
 
-describe.skip('App — Settings view', () => {
+describe('App — Settings view', () => {
   beforeEach(() => {
     promptService.getApiKey.mockResolvedValue('');
     promptService.saveApiKey.mockResolvedValue(true);
+    promptService.saveOllamaUrl.mockResolvedValue(true);
+    promptService.saveOllamaApiKey.mockResolvedValue(true);
+    promptService.saveSlotConfig.mockResolvedValue(true);
+    promptService.saveSendTargets.mockResolvedValue(true);
   });
 
   it('Save button is disabled while the input is empty', async () => {
     render(<App />);
 
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-...'));
 
     expect(screen.getByRole('button', { name: /Save & Continue/i })).toBeDisabled();
   });
@@ -112,9 +116,9 @@ describe.skip('App — Settings view', () => {
   it('Save button enables once a key is typed', async () => {
     render(<App />);
 
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-...'));
 
-    fireEvent.change(screen.getByPlaceholderText('sk-ant-api03-…'), {
+    fireEvent.change(screen.getByPlaceholderText('sk-ant-api03-...'), {
       target: { value: 'sk-ant-test' },
     });
 
@@ -124,7 +128,7 @@ describe.skip('App — Settings view', () => {
   it('does not show a back button when no key exists (first-time setup)', async () => {
     render(<App />);
 
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-...'));
 
     expect(screen.queryByRole('button', { name: /Back/i })).not.toBeInTheDocument();
   });
@@ -132,9 +136,9 @@ describe.skip('App — Settings view', () => {
   it('navigates to Main view after saving', async () => {
     render(<App />);
 
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
+    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-...'));
 
-    fireEvent.change(screen.getByPlaceholderText('sk-ant-api03-…'), {
+    fireEvent.change(screen.getByPlaceholderText('sk-ant-api03-...'), {
       target: { value: 'sk-ant-test-key' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Save & Continue/i }));
@@ -149,9 +153,10 @@ describe.skip('App — Settings view', () => {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-describe.skip('App — Main view', () => {
+describe('App — Main view', () => {
   beforeEach(() => {
     promptService.getApiKey.mockResolvedValue('sk-ant-stored');
+    promptService.saveHistoryEntry.mockResolvedValue(true);
   });
 
   it('Generate button is disabled when textarea is empty', async () => {
@@ -188,6 +193,7 @@ describe.skip('App — Main view', () => {
     await waitFor(() => {
       expect(promptService.generatePrompt).toHaveBeenCalledWith(
         'Write a blog post about AI',
+        undefined,
       );
     });
   });
@@ -201,6 +207,8 @@ describe.skip('App — Main view', () => {
         reinforcement: 're', assembled: 'THE FULL PROMPT TEXT',
       },
       tier: 'simple',
+      generateProvider: 'anthropic',
+      generateModel: DEFAULT_MODEL,
     });
 
     render(<App />);
@@ -236,10 +244,11 @@ describe.skip('App — Main view', () => {
     render(<App />);
     await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
 
-    fireEvent.click(screen.getByTitle('API Key Settings'));
+    fireEvent.click(screen.getByTitle('Settings'));
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('sk-ant-api03-…')).toBeInTheDocument();
+      // With an existing key, the placeholder shows "(saved)" instead of the key hint
+      expect(screen.getByPlaceholderText(/saved/)).toBeInTheDocument();
     });
   });
 
@@ -247,7 +256,7 @@ describe.skip('App — Main view', () => {
     render(<App />);
     await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
 
-    fireEvent.click(screen.getByTitle('API Key Settings'));
+    fireEvent.click(screen.getByTitle('Settings'));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Back/i })).toBeInTheDocument();
@@ -258,7 +267,7 @@ describe.skip('App — Main view', () => {
     render(<App />);
     await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
 
-    fireEvent.click(screen.getByTitle('API Key Settings'));
+    fireEvent.click(screen.getByTitle('Settings'));
     await waitFor(() => screen.getByRole('button', { name: /Back/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /Back/i }));
@@ -267,101 +276,5 @@ describe.skip('App — Main view', () => {
       expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
     });
     expect(promptService.saveApiKey).not.toHaveBeenCalled();
-  });
-});
-
-// ── Ollama provider ────────────────────────────────────────────────────────────
-
-describe.skip('App — Ollama provider', () => {
-  it('shows Ollama fields when Ollama tab is clicked', async () => {
-    render(<App />);
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
-
-    expect(screen.getByPlaceholderText('http://localhost:11434')).toBeInTheDocument();
-  });
-
-  it('auto-fetches models when switching to Ollama tab', async () => {
-    promptService.fetchOllamaModels.mockResolvedValue({
-      success: true,
-      models: ['llama3.2', 'mistral', 'phi3'],
-    });
-
-    render(<App />);
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'llama3.2' })).toBeInTheDocument();
-    });
-    expect(screen.getByRole('option', { name: 'mistral' })).toBeInTheDocument();
-  });
-
-  it('Fetch Models button triggers a re-fetch', async () => {
-    promptService.fetchOllamaModels
-      .mockResolvedValueOnce({ success: true, models: [] })
-      .mockResolvedValueOnce({ success: true, models: ['llama3.2', 'mistral'] });
-
-    render(<App />);
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
-
-    await waitFor(() => screen.getByRole('button', { name: /Fetch Models/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Fetch Models/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'llama3.2' })).toBeInTheDocument();
-    });
-  });
-
-  it('shows fetch error when Ollama server is unreachable', async () => {
-    promptService.fetchOllamaModels.mockResolvedValue({
-      success: false,
-      error: 'ECONNREFUSED',
-    });
-
-    render(<App />);
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('ECONNREFUSED')).toBeInTheDocument();
-    });
-  });
-
-  it('Save & Continue is disabled until a model is fetched and selected', async () => {
-    render(<App />);
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
-
-    await waitFor(() => screen.getByRole('button', { name: /Fetch Models/i }));
-
-    expect(screen.getByRole('button', { name: /Save & Continue/i })).toBeDisabled();
-  });
-
-  it('navigates to Main view after saving Ollama config', async () => {
-    promptService.fetchOllamaModels.mockResolvedValue({
-      success: true,
-      models: ['llama3.2'],
-    });
-    promptService.saveSlotConfig.mockResolvedValue(true);
-
-    render(<App />);
-    await waitFor(() => screen.getByPlaceholderText('sk-ant-api03-…'));
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Ollama' }));
-
-    await waitFor(() => screen.getByRole('option', { name: 'llama3.2' }));
-
-    fireEvent.click(screen.getByRole('button', { name: /Save & Continue/i }));
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Describe your task/)).toBeInTheDocument();
-    });
   });
 });
