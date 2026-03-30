@@ -10,6 +10,7 @@ const {
   clipboard,
   nativeImage,
   safeStorage,
+  shell,
 } = require('electron');
 const path  = require('path');
 const Store = require('electron-store');
@@ -99,6 +100,43 @@ function extractJSON(text) {
   return text.trim();
 }
 
+// ── Config Migration ─────────────────────────────────────────────────────────
+
+const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+
+const DEFAULT_SEND_TARGETS = [
+  { name: 'Claude',  url: 'https://claude.ai/new' },
+  { name: 'ChatGPT', url: 'https://chatgpt.com' },
+  { name: 'Gemini',  url: 'https://gemini.google.com/app' },
+];
+
+function migrateConfig() {
+  if (store.get('configMigrated')) return;
+
+  const oldProvider = store.get('provider', 'anthropic');
+  const oldModel    = store.get('model', DEFAULT_ANTHROPIC_MODEL);
+
+  for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+    if (!store.get(`${slot}.provider`)) {
+      store.set(`${slot}.provider`, oldProvider);
+      store.set(`${slot}.model`, slot === 'classify' ? DEFAULT_ANTHROPIC_MODEL : oldModel);
+    }
+  }
+
+  if (!store.get('sendTargets')) {
+    store.set('sendTargets', DEFAULT_SEND_TARGETS);
+  }
+
+  if (!store.get('history')) {
+    store.set('history', []);
+  }
+
+  store.delete('provider');
+  store.delete('model');
+
+  store.set('configMigrated', true);
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -169,6 +207,8 @@ function toggleWindow() {
 app.whenReady().then(() => {
   // Hide from macOS dock (no-op on Windows, harmless)
   if (app.dock) app.dock.hide();
+
+  migrateConfig();
 
   createWindow();
 
@@ -310,25 +350,11 @@ app.whenReady().then(() => {
     return stored; // plaintext fallback path
   });
 
-  // Persist selected model (plain string, not sensitive)
-  ipcMain.handle('save-model', (_event, model) => {
-    store.set('model', model);
-    return true;
-  });
-
-  ipcMain.handle('get-model', () => {
-    return store.get('model', 'claude-haiku-4-5-20251001');
-  });
-
   // Write text to the system clipboard
   ipcMain.handle('copy-to-clipboard', (_event, text) => {
     clipboard.writeText(text);
     return true;
   });
-
-  // Provider selection
-  ipcMain.handle('save-provider', (_event, provider) => { store.set('provider', provider); return true; });
-  ipcMain.handle('get-provider',  () => store.get('provider', 'anthropic'));
 
   // Ollama configuration
   ipcMain.handle('save-ollama-url', (_event, url) => { store.set('ollamaUrl', url); return true; });
@@ -359,8 +385,75 @@ app.whenReady().then(() => {
     return stored;
   });
 
-  ipcMain.handle('save-ollama-model', (_event, model) => { store.set('ollamaModel', model); return true; });
-  ipcMain.handle('get-ollama-model',  () => store.get('ollamaModel', ''));
+  // ── Slot config ─────────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-slot-config', () => {
+    return {
+      classify: {
+        provider: store.get('classify.provider', 'anthropic'),
+        model:    store.get('classify.model', DEFAULT_ANTHROPIC_MODEL),
+      },
+      generateSimple: {
+        provider: store.get('generateSimple.provider', 'anthropic'),
+        model:    store.get('generateSimple.model', DEFAULT_ANTHROPIC_MODEL),
+      },
+      generateComplex: {
+        provider: store.get('generateComplex.provider', 'anthropic'),
+        model:    store.get('generateComplex.model', DEFAULT_ANTHROPIC_MODEL),
+      },
+      ollamaUrl: store.get('ollamaUrl', 'http://localhost:11434'),
+    };
+  });
+
+  ipcMain.handle('save-slot-config', (_event, config) => {
+    for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+      if (config[slot]) {
+        store.set(`${slot}.provider`, config[slot].provider);
+        store.set(`${slot}.model`, config[slot].model);
+      }
+    }
+    if (config.ollamaUrl !== undefined) {
+      store.set('ollamaUrl', config.ollamaUrl);
+    }
+    return true;
+  });
+
+  // ── Send targets ────────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-send-targets', () => {
+    return store.get('sendTargets', DEFAULT_SEND_TARGETS);
+  });
+
+  ipcMain.handle('save-send-targets', (_event, targets) => {
+    store.set('sendTargets', targets);
+    return true;
+  });
+
+  ipcMain.handle('open-external-url', (_event, url) => {
+    shell.openExternal(url);
+    return true;
+  });
+
+  // ── Prompt history ──────────────────────────────────────────────────────────
+
+  const HISTORY_MAX = 50;
+
+  ipcMain.handle('get-history', () => {
+    return store.get('history', []);
+  });
+
+  ipcMain.handle('save-history-entry', (_event, entry) => {
+    const history = store.get('history', []);
+    history.unshift(entry);
+    if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+    store.set('history', history);
+    return true;
+  });
+
+  ipcMain.handle('clear-history', () => {
+    store.set('history', []);
+    return true;
+  });
 
   // Window chrome controls
   ipcMain.handle('close-window',    () => win.hide());
