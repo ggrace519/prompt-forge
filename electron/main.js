@@ -20,9 +20,47 @@ const isDev = process.env.NODE_ENV === 'development';
 let tray = null;
 let win  = null;
 
-// ── System Prompt ─────────────────────────────────────────────────────────────
+// ── System Prompts ───────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a world-class prompt engineer. When given a task description, you produce a comprehensive, structured AI prompt.
+const CLASSIFY_PROMPT = `You are a prompt complexity classifier. Given a task description, determine whether it requires a simple, standard, or complex prompt structure.
+
+- simple: Creative, conversational, or single-step tasks (e.g. "write a haiku", "draft an email", "explain X simply")
+- standard: Tasks with moderate constraints, structure, or domain context (e.g. "write SEO product copy", "summarize with key takeaways", "create a lesson plan")
+- complex: Agentic, multi-step, or heavily constrained tasks (e.g. "build a code review agent", "create a data pipeline prompt with retry logic", "design a multi-turn tutoring system")
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose. Just the JSON object.
+
+{"tier": "simple" | "standard" | "complex"}`;
+
+const SYSTEM_PROMPT_SIMPLE = `You are a world-class prompt engineer. When given a task description, you produce a focused, concise AI prompt.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 4 string fields (all values must be strings, not nested objects or arrays):
+
+{
+  "role": "1-2 sentences defining the AI's identity and primary mission",
+  "instructions": "Clear directives covering tone, format, and key constraints",
+  "outputFormat": "What the output should look like — length, style, structure",
+  "assembled": "The COMPLETE, copy-paste-ready prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Output Format"
+}`;
+
+const SYSTEM_PROMPT_STANDARD = `You are a world-class prompt engineer. When given a task description, you produce a structured AI prompt with appropriate depth.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 6 string fields (all values must be strings, not nested objects or arrays):
+
+{
+  "role": "2-3 sentences defining the AI's identity, expertise level, and primary mission",
+  "instructions": "Numbered directives using strong action verbs. Cover tone, format, constraints, edge cases, and what NOT to do.",
+  "context": "Background information, domain knowledge, and situational context that grounds and constrains the AI's responses",
+  "outputFormat": "Explicit output contract — exact schema, field names, length, style, sections, and an example skeleton if helpful",
+  "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output",
+  "assembled": "The COMPLETE, copy-paste-ready master prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Context, ## Output Format, ## Reasoning Steps"
+}`;
+
+const SYSTEM_PROMPT_COMPLEX = `You are a world-class prompt engineer. When given a task description, you produce a comprehensive, structured AI prompt.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
@@ -38,6 +76,12 @@ Return an object with exactly these 8 string fields (all values must be strings,
   "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt",
   "assembled": "The COMPLETE, copy-paste-ready master prompt combining all sections above with clear ## markdown headers: ## Role, ## Instructions, ## Context, ## Output Format, ## Reasoning Steps, ## Examples, ## Remember"
 }`;
+
+const TEMPLATE_MAP = {
+  simple:   SYSTEM_PROMPT_SIMPLE,
+  standard: SYSTEM_PROMPT_STANDARD,
+  complex:  SYSTEM_PROMPT_COMPLEX,
+};
 
 // ── JSON extraction ───────────────────────────────────────────────────────────
 
