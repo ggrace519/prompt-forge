@@ -408,10 +408,9 @@ function SettingsView({
 
   const [saving, setSaving] = useState(false);
 
-  // Auto-fetch Ollama models on mount if any slot uses Ollama
+  // Always auto-fetch Ollama models on mount so they're ready when the user switches a slot
   useEffect(() => {
-    const hasOllamaSlot = Object.values(slots).some((s) => s.provider === 'ollama');
-    if (hasOllamaSlot && serverUrl && ollamaModels.length === 0) {
+    if (serverUrl && ollamaModels.length === 0) {
       handleFetchModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,9 +423,14 @@ function SettingsView({
       const result = await promptService.fetchOllamaModels(serverUrl, ollamaKey);
       if (result.success) {
         setOllamaModels(result.models);
+        if (result.models.length === 0) {
+          setFetchError('Server responded but returned 0 models');
+        }
       } else {
         setFetchError(result.error || 'Could not connect to Ollama server');
       }
+    } catch (err) {
+      setFetchError('IPC error: ' + (err.message || String(err)));
     } finally {
       setFetchingModels(false);
     }
@@ -662,17 +666,14 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
   const [toast,        setToast]        = useState('');
   const [ollamaModels, setOllamaModels] = useState([]);
 
-  // Fetch Ollama models if any slot uses Ollama
+  // Always fetch Ollama models so they're ready in the override row
   useEffect(() => {
-    const hasOllamaSlot = slotConfig && Object.values(slotConfig).some(
-      (s) => s && s.provider === 'ollama'
-    );
-    if (hasOllamaSlot && ollamaUrl) {
+    if (ollamaUrl) {
       promptService.fetchOllamaModels(ollamaUrl, ollamaApiKey || '').then((result) => {
         if (result.success) setOllamaModels(result.models);
       });
     }
-  }, [slotConfig, ollamaUrl, ollamaApiKey]);
+  }, [ollamaUrl, ollamaApiKey]);
 
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
