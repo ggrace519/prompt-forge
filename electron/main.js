@@ -243,7 +243,7 @@ app.whenReady().then(() => {
 
   // ── Provider call helper ──────────────────────────────────────────────────
 
-  async function callProvider(provider, model, apiKey, ollamaUrl, ollamaApiKey, systemPrompt, userMessage, maxTokens = 8192) {
+  async function callProvider(provider, model, apiKey, ollamaUrl, ollamaApiKey, systemPrompt, userMessage, maxTokens = 16384) {
     if (provider === 'ollama') {
       const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
       const headers = { 'Content-Type': 'application/json' };
