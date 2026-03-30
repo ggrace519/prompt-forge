@@ -1213,8 +1213,10 @@ button, label, span, h1, p {
 .settings-section-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   width: 100%;
+  min-height: 36px;
   padding: 8px 10px;
   background: var(--surface);
   border: none;
@@ -1222,6 +1224,7 @@ button, label, span, h1, p {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 12px;
+  font-weight: 500;
   text-align: left;
   transition: background var(--transition);
 }
