@@ -296,7 +296,6 @@ export default function App() {
 
 /** Unified model dropdown — Anthropic + Ollama models in one list. */
 function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ollamaModels }) {
-  // Encode provider into the value: "anthropic:model-id" or "ollama:model-name"
   const currentValue = config ? `${config.provider}:${config.model}` : '';
 
   function handleChange(encoded) {
@@ -305,6 +304,14 @@ function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ol
     const model = encoded.slice(sep + 1);
     onChange({ provider, model });
   }
+
+  // Ensure current model is always in its provider list so the select stays interactive
+  const anthList = config?.provider === 'anthropic' && config.model && !anthropicModels.includes(config.model)
+    ? [config.model, ...anthropicModels]
+    : anthropicModels;
+  const ollaList = config?.provider === 'ollama' && config.model && !ollamaModels.includes(config.model)
+    ? [config.model, ...ollamaModels]
+    : ollamaModels;
 
   return (
     <div className="field-group">
@@ -315,20 +322,19 @@ function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ol
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
       >
-        {anthropicModels.length > 0 && (
-          <optgroup label="Anthropic">
-            {anthropicModels.map((m) => (
-              <option key={m} value={`anthropic:${m}`}>{m}</option>
-            ))}
-          </optgroup>
-        )}
-        {ollamaModels.length > 0 && (
-          <optgroup label="Ollama">
-            {ollamaModels.map((m) => (
-              <option key={m} value={`ollama:${m}`}>{m}</option>
-            ))}
-          </optgroup>
-        )}
+        <optgroup label="Anthropic">
+          {anthList.map((m) => (
+            <option key={m} value={`anthropic:${m}`}>{m}</option>
+          ))}
+        </optgroup>
+        <optgroup label="Ollama">
+          {ollaList.length > 0
+            ? ollaList.map((m) => (
+                <option key={m} value={`ollama:${m}`}>{m}</option>
+              ))
+            : <option disabled value="">Fetch models first</option>
+          }
+        </optgroup>
       </select>
     </div>
   );
@@ -871,6 +877,13 @@ function OverrideSlot({ label, slotKey, config, anthropicModels = [], ollamaMode
     onChange(slotKey, provider, model);
   }
 
+  const anthList = config?.provider === 'anthropic' && config.model && !anthropicModels.includes(config.model)
+    ? [config.model, ...anthropicModels]
+    : anthropicModels;
+  const ollaList = config?.provider === 'ollama' && config.model && !ollamaModels.includes(config.model)
+    ? [config.model, ...ollamaModels]
+    : ollamaModels;
+
   return (
     <div className="override-slot">
       <span className="override-label">{label}</span>
@@ -879,16 +892,14 @@ function OverrideSlot({ label, slotKey, config, anthropicModels = [], ollamaMode
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
       >
-        {anthropicModels.length > 0 && (
-          <optgroup label="Anthropic">
-            {anthropicModels.map((m) => (
-              <option key={m} value={`anthropic:${m}`}>{m}</option>
-            ))}
-          </optgroup>
-        )}
-        {ollamaModels.length > 0 && (
+        <optgroup label="Anthropic">
+          {anthList.map((m) => (
+            <option key={m} value={`anthropic:${m}`}>{m}</option>
+          ))}
+        </optgroup>
+        {ollaList.length > 0 && (
           <optgroup label="Ollama">
-            {ollamaModels.map((m) => (
+            {ollaList.map((m) => (
               <option key={m} value={`ollama:${m}`}>{m}</option>
             ))}
           </optgroup>
