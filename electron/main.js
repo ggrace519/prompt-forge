@@ -100,6 +100,7 @@ function extractJSON(text) {
 // ── Config Migration ─────────────────────────────────────────────────────────
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+const DEFAULT_OPENAI_MODEL    = 'gpt-4o-mini';
 
 const DEFAULT_SEND_TARGETS = [
   { name: 'Claude',  url: 'https://claude.ai/new' },
@@ -108,30 +109,40 @@ const DEFAULT_SEND_TARGETS = [
 ];
 
 function migrateConfig() {
-  if (store.get('configMigrated')) return;
+  if (!store.get('configMigrated')) {
+    const oldProvider = store.get('provider', 'anthropic');
+    const oldModel    = store.get('model', DEFAULT_ANTHROPIC_MODEL);
 
-  const oldProvider = store.get('provider', 'anthropic');
-  const oldModel    = store.get('model', DEFAULT_ANTHROPIC_MODEL);
-
-  for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
-    if (!store.get(`${slot}.provider`)) {
-      store.set(`${slot}.provider`, oldProvider);
-      store.set(`${slot}.model`, slot === 'classify' ? DEFAULT_ANTHROPIC_MODEL : oldModel);
+    for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+      if (!store.get(`${slot}.provider`)) {
+        store.set(`${slot}.provider`, oldProvider);
+        store.set(`${slot}.model`, slot === 'classify' ? DEFAULT_ANTHROPIC_MODEL : oldModel);
+      }
     }
+
+    if (!store.get('sendTargets')) {
+      store.set('sendTargets', DEFAULT_SEND_TARGETS);
+    }
+
+    if (!store.get('history')) {
+      store.set('history', []);
+    }
+
+    store.delete('provider');
+    store.delete('model');
+
+    store.set('configMigrated', true);
   }
 
-  if (!store.get('sendTargets')) {
-    store.set('sendTargets', DEFAULT_SEND_TARGETS);
+  // v2 — backfill `authMethod: 'apiKey'` onto every slot that predates the field.
+  if (!store.get('configMigratedV2')) {
+    for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+      if (!store.get(`${slot}.authMethod`)) {
+        store.set(`${slot}.authMethod`, 'apiKey');
+      }
+    }
+    store.set('configMigratedV2', true);
   }
-
-  if (!store.get('history')) {
-    store.set('history', []);
-  }
-
-  store.delete('provider');
-  store.delete('model');
-
-  store.set('configMigrated', true);
 }
 
 // ── Window ────────────────────────────────────────────────────────────────────
@@ -246,7 +257,9 @@ app.whenReady().then(() => {
 
   // ── Provider call helper ──────────────────────────────────────────────────
 
-  async function callProvider(provider, model, apiKey, ollamaUrl, ollamaApiKey, systemPrompt, userMessage, maxTokens = 16384) {
+  async function callProvider(creds, systemPrompt, userMessage, maxTokens = 16384) {
+    const { provider, authMethod, model, apiKey, openaiApiKey, ollamaUrl, ollamaApiKey } = creds;
+
     if (provider === 'ollama') {
       const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
       const headers = { 'Content-Type': 'application/json' };
@@ -274,7 +287,69 @@ app.whenReady().then(() => {
       return content;
     }
 
-    // Anthropic path — use fetch directly (same pattern as Ollama)
+    if (provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: model || DEFAULT_OPENAI_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`OpenAI ${res.status}: ${body}`);
+      }
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('OpenAI returned no content');
+      return content;
+    }
+
+    // Anthropic — subscription path uses claude-agent-sdk (reads Claude Code creds).
+    if (provider === 'anthropic' && authMethod === 'subscription') {
+      // Lazy ESM import — main.js is CJS and the agent SDK is ESM-only.
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
+      const iter = query({
+        prompt: userMessage,
+        options: {
+          model: model || DEFAULT_ANTHROPIC_MODEL,
+          systemPrompt,
+          settingSources: [],
+          permissionMode: 'bypassPermissions',
+          allowedTools: [],
+          maxTurns: 1,
+        },
+      });
+
+      let collected = '';
+      let resultText = '';
+      for await (const message of iter) {
+        if (message.type === 'assistant') {
+          for (const block of message.message?.content || []) {
+            if (block.type === 'text' && block.text) collected += block.text;
+          }
+        } else if (message.type === 'result') {
+          if (message.subtype === 'success' && typeof message.result === 'string') {
+            resultText = message.result;
+          } else if (message.subtype !== 'success') {
+            throw new Error(`Claude subscription error: ${message.subtype}`);
+          }
+        }
+      }
+      const text = resultText || collected;
+      if (!text) throw new Error('Claude subscription returned no text');
+      return text;
+    }
+
+    // Anthropic — API-key path (default).
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -300,30 +375,44 @@ app.whenReady().then(() => {
     return textBlock.text;
   }
 
+  /** Read+decrypt a key stored as either DPAPI ciphertext (base64) or plaintext. */
+  function readEncryptedKey(valueKey, flagKey) {
+    const stored      = store.get(valueKey, '');
+    const isEncrypted = store.get(flagKey, false);
+    if (!stored) return '';
+    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+      try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+    }
+    return stored;
+  }
+
+  /** Persist a key, encrypting via DPAPI when available. */
+  function writeEncryptedKey(valueKey, flagKey, key) {
+    if (!key) {
+      store.delete(valueKey);
+      store.delete(flagKey);
+      return;
+    }
+    if (safeStorage.isEncryptionAvailable()) {
+      store.set(valueKey, safeStorage.encryptString(key).toString('base64'));
+      store.set(flagKey, true);
+    } else {
+      store.set(valueKey, key);
+      store.set(flagKey, false);
+    }
+  }
+
   /** Resolve credentials for a given slot. */
   function getSlotCredentials(slot) {
-    const provider = store.get(`${slot}.provider`, 'anthropic');
-    const model    = store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL);
-    const apiKey   = (() => {
-      const stored      = store.get('apiKey', '');
-      const isEncrypted = store.get('apiKeyEncrypted', false);
-      if (!stored) return '';
-      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-      }
-      return stored;
-    })();
-    const ollamaUrl = store.get('ollamaUrl', 'http://localhost:11434');
-    const ollamaApiKey = (() => {
-      const stored      = store.get('ollamaApiKey', '');
-      const isEncrypted = store.get('ollamaApiKeyEncrypted', false);
-      if (!stored) return '';
-      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-      }
-      return stored;
-    })();
-    return { provider, model, apiKey, ollamaUrl, ollamaApiKey };
+    return {
+      provider:     store.get(`${slot}.provider`, 'anthropic'),
+      authMethod:   store.get(`${slot}.authMethod`, 'apiKey'),
+      model:        store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL),
+      apiKey:       readEncryptedKey('apiKey', 'apiKeyEncrypted'),
+      openaiApiKey: readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted'),
+      ollamaUrl:    store.get('ollamaUrl', 'http://localhost:11434'),
+      ollamaApiKey: readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted'),
+    };
   }
 
   // ── IPC Handlers ───────────────────────────────────────────────────────────
@@ -339,8 +428,7 @@ app.whenReady().then(() => {
         classifyCreds = getSlotCredentials('classify');
         try {
           const classifyText = await callProvider(
-            classifyCreds.provider, classifyCreds.model,
-            classifyCreds.apiKey, classifyCreds.ollamaUrl, classifyCreds.ollamaApiKey,
+            classifyCreds,
             CLASSIFY_PROMPT,
             `Classify this task: ${task}`,
             50,
@@ -363,8 +451,7 @@ app.whenReady().then(() => {
       const systemPrompt = TEMPLATE_MAP[tier];
 
       const textContent = await callProvider(
-        genCreds.provider, genCreds.model,
-        genCreds.apiKey, genCreds.ollamaUrl, genCreds.ollamaApiKey,
+        genCreds,
         systemPrompt,
         `Generate a perfect AI prompt for this task: ${task}`,
       );
@@ -497,15 +584,7 @@ app.whenReady().then(() => {
   // Fetch available models from Anthropic API
   ipcMain.handle('fetch-anthropic-models', async () => {
     try {
-      // Decrypt the stored API key
-      const stored      = store.get('apiKey', '');
-      const isEncrypted = store.get('apiKeyEncrypted', false);
-      let apiKey = '';
-      if (stored && isEncrypted && safeStorage.isEncryptionAvailable()) {
-        try { apiKey = safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { /* */ }
-      } else {
-        apiKey = stored;
-      }
+      const apiKey = readEncryptedKey('apiKey', 'apiKeyEncrypted');
       if (!apiKey) return { success: true, models: [] };
 
       const res = await fetch('https://api.anthropic.com/v1/models', {
@@ -526,38 +605,61 @@ app.whenReady().then(() => {
     }
   });
 
-  // Persist API key — encrypted via OS-native DPAPI (Windows) / Keychain (macOS)
+  // Fetch available models from OpenAI API
+  ipcMain.handle('fetch-openai-models', async () => {
+    try {
+      const apiKey = readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted');
+      if (!apiKey) return { success: true, models: [] };
+
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const models = (data.data || [])
+        .map((m) => m.id)
+        .filter((id) => id && /^(gpt-|o\d|chatgpt-)/i.test(id))
+        .sort();
+      return { success: true, models };
+    } catch (err) {
+      return { success: false, error: err.message || String(err) };
+    }
+  });
+
+  // Persist API key — encrypted via OS-native DPAPI (Windows) / Keychain (macOS).
   // The stored value in config.json is an opaque base64 blob, never the raw key.
   ipcMain.handle('save-api-key', (_event, key) => {
-    if (safeStorage.isEncryptionAvailable()) {
-      const encrypted = safeStorage.encryptString(key);
-      store.set('apiKey', encrypted.toString('base64'));
-      store.set('apiKeyEncrypted', true);
-    } else {
-      // Encryption unavailable (rare — e.g. headless Linux with no keyring).
-      // Store plaintext and flag it so get-api-key doesn't try to decrypt.
-      store.set('apiKey', key);
-      store.set('apiKeyEncrypted', false);
-    }
+    writeEncryptedKey('apiKey', 'apiKeyEncrypted', key);
     return true;
   });
 
-  // Retrieve and decrypt the API key
   ipcMain.handle('get-api-key', () => {
-    const stored      = store.get('apiKey', '');
-    const isEncrypted = store.get('apiKeyEncrypted', false);
-    if (!stored) return '';
-    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-      try {
-        return safeStorage.decryptString(Buffer.from(stored, 'base64'));
-      } catch {
-        // Blob is unreadable (e.g. different OS user or corrupted); force re-entry.
-        store.delete('apiKey');
-        store.delete('apiKeyEncrypted');
-        return '';
-      }
-    }
-    return stored; // plaintext fallback path
+    return readEncryptedKey('apiKey', 'apiKeyEncrypted');
+  });
+
+  ipcMain.handle('save-openai-api-key', (_event, key) => {
+    writeEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted', key);
+    return true;
+  });
+
+  ipcMain.handle('get-openai-api-key', () => {
+    return readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted');
+  });
+
+  // Detect Claude Code CLI for the subscription auth path.
+  ipcMain.handle('check-claude-cli-status', async () => {
+    const { exec } = require('child_process');
+    return new Promise((resolve) => {
+      const cmd = process.platform === 'win32' ? 'claude --version' : 'claude --version';
+      exec(cmd, { timeout: 3000, windowsHide: true }, (err, stdout) => {
+        if (err) {
+          resolve({ installed: false });
+          return;
+        }
+        const version = String(stdout || '').trim().split('\n')[0] || '';
+        resolve({ installed: true, version });
+      });
+    });
   });
 
   // Write text to the system clipboard
@@ -571,47 +673,28 @@ app.whenReady().then(() => {
   ipcMain.handle('get-ollama-url',  () => store.get('ollamaUrl', 'http://localhost:11434'));
 
   ipcMain.handle('save-ollama-api-key', (_event, key) => {
-    if (!key) {
-      store.delete('ollamaApiKey');
-      store.delete('ollamaApiKeyEncrypted');
-      return true;
-    }
-    if (safeStorage.isEncryptionAvailable()) {
-      store.set('ollamaApiKey', safeStorage.encryptString(key).toString('base64'));
-      store.set('ollamaApiKeyEncrypted', true);
-    } else {
-      store.set('ollamaApiKey', key);
-      store.set('ollamaApiKeyEncrypted', false);
-    }
+    writeEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted', key);
     return true;
   });
   ipcMain.handle('get-ollama-api-key', () => {
-    const stored      = store.get('ollamaApiKey', '');
-    const isEncrypted = store.get('ollamaApiKeyEncrypted', false);
-    if (!stored) return '';
-    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-      try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-    }
-    return stored;
+    return readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted');
   });
 
   // ── Slot config ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('get-slot-config', () => {
+    function readSlot(slot) {
+      return {
+        provider:   store.get(`${slot}.provider`, 'anthropic'),
+        authMethod: store.get(`${slot}.authMethod`, 'apiKey'),
+        model:      store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL),
+      };
+    }
     return {
-      classify: {
-        provider: store.get('classify.provider', 'anthropic'),
-        model:    store.get('classify.model', DEFAULT_ANTHROPIC_MODEL),
-      },
-      generateSimple: {
-        provider: store.get('generateSimple.provider', 'anthropic'),
-        model:    store.get('generateSimple.model', DEFAULT_ANTHROPIC_MODEL),
-      },
-      generateComplex: {
-        provider: store.get('generateComplex.provider', 'anthropic'),
-        model:    store.get('generateComplex.model', DEFAULT_ANTHROPIC_MODEL),
-      },
-      ollamaUrl: store.get('ollamaUrl', 'http://localhost:11434'),
+      classify:        readSlot('classify'),
+      generateSimple:  readSlot('generateSimple'),
+      generateComplex: readSlot('generateComplex'),
+      ollamaUrl:       store.get('ollamaUrl', 'http://localhost:11434'),
     };
   });
 
@@ -619,6 +702,7 @@ app.whenReady().then(() => {
     for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
       if (config[slot]) {
         store.set(`${slot}.provider`, config[slot].provider);
+        store.set(`${slot}.authMethod`, config[slot].authMethod || 'apiKey');
         store.set(`${slot}.model`, config[slot].model);
       }
     }

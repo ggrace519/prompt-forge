@@ -23,6 +23,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getApiKey: () =>
     ipcRenderer.invoke('get-api-key'),
 
+  // Shared OpenAI key
+  saveOpenaiApiKey: (key) =>
+    ipcRenderer.invoke('save-openai-api-key', key),
+  getOpenaiApiKey: () =>
+    ipcRenderer.invoke('get-openai-api-key'),
+  fetchOpenaiModels: () =>
+    ipcRenderer.invoke('fetch-openai-models'),
+
+  // Claude Code CLI status (for subscription auth)
+  checkClaudeCliStatus: () =>
+    ipcRenderer.invoke('check-claude-cli-status'),
+
   // Clipboard
   copyToClipboard: (text) =>
     ipcRenderer.invoke('copy-to-clipboard', text),

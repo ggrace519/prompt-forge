@@ -44,6 +44,26 @@ export async function getApiKey() {
   return getIPC().getApiKey();
 }
 
+// ── Shared OpenAI key ───────────────────────────────────────────────────────
+
+export async function saveOpenaiApiKey(key) {
+  return getIPC().saveOpenaiApiKey(key);
+}
+
+export async function getOpenaiApiKey() {
+  return getIPC().getOpenaiApiKey();
+}
+
+export async function fetchOpenaiModels() {
+  return getIPC().fetchOpenaiModels();
+}
+
+// ── Claude Code CLI (for subscription auth) ─────────────────────────────────
+
+export async function checkClaudeCliStatus() {
+  return getIPC().checkClaudeCliStatus();
+}
+
 // ── Clipboard ───────────────────────────────────────────────────────────────
 
 export async function copyToClipboard(text) {

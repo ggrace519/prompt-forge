@@ -8,29 +8,33 @@ import App from '../src/App.jsx';
 // promptService, so mocking that module is sufficient.
 
 vi.mock('../src/lib/promptService.js', () => ({
-  getApiKey:          vi.fn(),
-  saveApiKey:         vi.fn(),
-  generatePrompt:     vi.fn(),
-  copyToClipboard:    vi.fn(),
-  closeWindow:        vi.fn(),
-  minimizeWindow:     vi.fn(),
-  resizeWindow:       vi.fn(),
-  getSlotConfig:      vi.fn(),
-  saveSlotConfig:     vi.fn(),
-  getOllamaUrl:       vi.fn(),
-  saveOllamaUrl:      vi.fn(),
-  getOllamaApiKey:    vi.fn(),
-  saveOllamaApiKey:   vi.fn(),
-  fetchOllamaModels:  vi.fn(),
+  getApiKey:           vi.fn(),
+  saveApiKey:          vi.fn(),
+  getOpenaiApiKey:     vi.fn(),
+  saveOpenaiApiKey:    vi.fn(),
+  fetchOpenaiModels:   vi.fn(),
+  checkClaudeCliStatus: vi.fn(),
+  generatePrompt:      vi.fn(),
+  copyToClipboard:     vi.fn(),
+  closeWindow:         vi.fn(),
+  minimizeWindow:      vi.fn(),
+  resizeWindow:        vi.fn(),
+  getSlotConfig:       vi.fn(),
+  saveSlotConfig:      vi.fn(),
+  getOllamaUrl:        vi.fn(),
+  saveOllamaUrl:       vi.fn(),
+  getOllamaApiKey:     vi.fn(),
+  saveOllamaApiKey:    vi.fn(),
+  fetchOllamaModels:   vi.fn(),
   fetchAnthropicModels: vi.fn(),
-  getSendTargets:     vi.fn(),
-  saveSendTargets:    vi.fn(),
-  openExternalUrl:    vi.fn(),
-  getHistory:         vi.fn(),
-  saveHistoryEntry:   vi.fn(),
-  clearHistory:       vi.fn(),
-  getTheme:           vi.fn(),
-  saveTheme:          vi.fn(),
+  getSendTargets:      vi.fn(),
+  saveSendTargets:     vi.fn(),
+  openExternalUrl:     vi.fn(),
+  getHistory:          vi.fn(),
+  saveHistoryEntry:    vi.fn(),
+  clearHistory:        vi.fn(),
+  getTheme:            vi.fn(),
+  saveTheme:           vi.fn(),
 }));
 
 import * as promptService from '../src/lib/promptService.js';
@@ -41,10 +45,13 @@ const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 /** Set sensible defaults for every getter so tests don't need to repeat them. */
 function setupDefaultMocks() {
   promptService.getApiKey.mockResolvedValue('');
+  promptService.getOpenaiApiKey.mockResolvedValue('');
+  promptService.fetchOpenaiModels.mockResolvedValue({ success: true, models: ['gpt-4o-mini'] });
+  promptService.checkClaudeCliStatus.mockResolvedValue({ installed: false });
   promptService.getSlotConfig.mockResolvedValue({
-    classify: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-    generateSimple: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-    generateComplex: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
+    classify:        { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
+    generateSimple:  { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
+    generateComplex: { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
     ollamaUrl: 'http://localhost:11434',
   });
   promptService.getOllamaUrl.mockResolvedValue('http://localhost:11434');

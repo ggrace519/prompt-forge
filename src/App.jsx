@@ -18,6 +18,37 @@ const FALLBACK_ANTHROPIC_MODELS = [
   'claude-haiku-4-5-20251001',
 ];
 
+const FALLBACK_OPENAI_MODELS = [
+  'gpt-4o',
+  'gpt-4o-mini',
+];
+
+// ── Slot encoding helpers ─────────────────────────────────────────────────────
+// A slot is `{ provider, authMethod, model }` where authMethod distinguishes
+// `anthropic` API-key from Claude Code subscription. Encoded form is used as
+// the <select> option value: "<provider>:<authMethod>:<model>". Splitting on
+// the first two `:` only — model names may legitimately contain `:` (e.g.
+// `llama3:8b` from Ollama).
+function encodeSlot(config) {
+  if (!config) return '';
+  const auth = config.authMethod || 'apiKey';
+  return `${config.provider}:${auth}:${config.model || ''}`;
+}
+
+function decodeSlot(encoded) {
+  const first = encoded.indexOf(':');
+  const second = encoded.indexOf(':', first + 1);
+  return {
+    provider:   encoded.slice(0, first),
+    authMethod: encoded.slice(first + 1, second),
+    model:      encoded.slice(second + 1),
+  };
+}
+
+function defaultSlot(provider = 'anthropic', model = 'claude-haiku-4-5-20251001') {
+  return { provider, authMethod: 'apiKey', model };
+}
+
 const TIER_COLORS = {
   simple:   { bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.3)', text: '#4ade80' },
   standard: { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', text: '#f59e0b' },
@@ -231,31 +262,50 @@ function Toast({ message, onDone }) {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
+/** Does the current config let us call generate-prompt without further setup? */
+function hasUsableConfig({ apiKey, openaiApiKey, slotConfig }) {
+  if (!slotConfig) return false;
+  const slots = ['classify', 'generateSimple', 'generateComplex']
+    .map((k) => slotConfig[k])
+    .filter(Boolean);
+  return slots.some((s) => {
+    if (s.provider === 'ollama') return !!s.model;
+    if (s.provider === 'openai') return !!openaiApiKey;
+    if (s.provider === 'anthropic') {
+      return s.authMethod === 'subscription' || !!apiKey;
+    }
+    return false;
+  });
+}
+
 export default function App() {
-  const [view,         setView]         = useState('loading');
-  const [apiKey,       setApiKey]       = useState('');
-  const [slotConfig,   setSlotConfig]   = useState(null);
-  const [ollamaUrl,    setOllamaUrl]    = useState('http://localhost:11434');
-  const [ollamaApiKey, setOllamaApiKey] = useState('');
-  const [sendTargets,  setSendTargets]  = useState([]);
-  const [history,      setHistory]      = useState([]);
-  const [theme,        setTheme]        = useState('dark');
+  const [view,          setView]          = useState('loading');
+  const [apiKey,        setApiKey]        = useState('');
+  const [openaiApiKey,  setOpenaiApiKey]  = useState('');
+  const [slotConfig,    setSlotConfig]    = useState(null);
+  const [ollamaUrl,     setOllamaUrl]     = useState('http://localhost:11434');
+  const [ollamaApiKey,  setOllamaApiKey]  = useState('');
+  const [sendTargets,   setSendTargets]   = useState([]);
+  const [history,       setHistory]       = useState([]);
+  const [theme,         setTheme]         = useState('dark');
 
   useEffect(() => {
     Promise.all([
       promptService.getApiKey(),
+      promptService.getOpenaiApiKey(),
       promptService.getSlotConfig(),
       promptService.getOllamaUrl(),
       promptService.getOllamaApiKey(),
       promptService.getSendTargets(),
       promptService.getHistory(),
       promptService.getTheme(),
-    ]).then(([key, slots, oUrl, oKey, targets, hist, savedTheme]) => {
+    ]).then(([key, openaiKey, slots, oUrl, oKey, targets, hist, savedTheme]) => {
       setApiKey(key || '');
+      setOpenaiApiKey(openaiKey || '');
       setSlotConfig(slots || {
-        classify:       { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-        generateSimple: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-        generateComplex:{ provider: 'anthropic', model: 'claude-sonnet-4-5' },
+        classify:        defaultSlot(),
+        generateSimple:  defaultSlot(),
+        generateComplex: defaultSlot('anthropic', 'claude-sonnet-4-5'),
       });
       setOllamaUrl(oUrl || 'http://localhost:11434');
       setOllamaApiKey(oKey || '');
@@ -263,17 +313,14 @@ export default function App() {
       setHistory(hist || []);
       setTheme(savedTheme || 'dark');
 
-      // Determine if we can go straight to main
-      const hasAnthropicKey = !!key;
-      const hasOllamaSlot = slots && Object.values(slots).some(
-        (s) => s.provider === 'ollama' && s.model
-      );
-      setView((hasAnthropicKey || hasOllamaSlot) ? 'main' : 'settings');
+      const usable = hasUsableConfig({ apiKey: key, openaiApiKey: openaiKey, slotConfig: slots });
+      setView(usable ? 'main' : 'settings');
     }).catch(() => setView('settings'));
   }, []);
 
   const handleSettingsSaved = useCallback((config) => {
     setApiKey(config.apiKey);
+    setOpenaiApiKey(config.openaiApiKey);
     setSlotConfig(config.slotConfig);
     setOllamaUrl(config.ollamaUrl);
     setOllamaApiKey(config.ollamaApiKey);
@@ -288,9 +335,7 @@ export default function App() {
     promptService.saveTheme(next);
   }, [theme]);
 
-  const canGoBack = !!apiKey || (slotConfig && Object.values(slotConfig).some(
-    (s) => s.provider === 'ollama' && s.model
-  ));
+  const canGoBack = hasUsableConfig({ apiKey, openaiApiKey, slotConfig });
 
   if (view === 'loading') {
     return (
@@ -304,6 +349,7 @@ export default function App() {
     return (
       <SettingsView
         apiKey={apiKey}
+        openaiApiKey={openaiApiKey}
         slotConfig={slotConfig}
         ollamaUrl={ollamaUrl}
         ollamaApiKey={ollamaApiKey}
@@ -322,6 +368,7 @@ export default function App() {
       setSlotConfig={setSlotConfig}
       ollamaUrl={ollamaUrl}
       ollamaApiKey={ollamaApiKey}
+      openaiApiKey={openaiApiKey}
       sendTargets={sendTargets}
       history={history}
       setHistory={setHistory}
@@ -334,24 +381,28 @@ export default function App() {
 
 // ── SettingsView ──────────────────────────────────────────────────────────────
 
-/** Unified model dropdown — Anthropic + Ollama models in one list. */
-function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ollamaModels }) {
-  const currentValue = config ? `${config.provider}:${config.model}` : '';
+/** Unified model dropdown — Anthropic (API/subscription) + OpenAI + Ollama. */
+function SlotModelSelect({
+  label, slotKey, config, onChange,
+  anthropicModels, openaiModels, ollamaModels,
+}) {
+  const currentValue = encodeSlot(config);
 
-  function handleChange(encoded) {
-    const sep = encoded.indexOf(':');
-    const provider = encoded.slice(0, sep);
-    const model = encoded.slice(sep + 1);
-    onChange({ provider, model });
-  }
+  // Ensure the currently-selected model is present in its optgroup so the
+  // <select> doesn't silently flip to the first option when the model is
+  // missing from the fetched list.
+  const includeCurrent = (provider, authMethod, list) => {
+    const isHere =
+      config?.provider === provider &&
+      (config.authMethod || 'apiKey') === authMethod &&
+      config.model && !list.includes(config.model);
+    return isHere ? [config.model, ...list] : list;
+  };
 
-  // Ensure current model is always in its provider list so the select stays interactive
-  const anthList = config?.provider === 'anthropic' && config.model && !anthropicModels.includes(config.model)
-    ? [config.model, ...anthropicModels]
-    : anthropicModels;
-  const ollaList = config?.provider === 'ollama' && config.model && !ollamaModels.includes(config.model)
-    ? [config.model, ...ollamaModels]
-    : ollamaModels;
+  const anthApiList = includeCurrent('anthropic', 'apiKey',       anthropicModels);
+  const anthSubList = includeCurrent('anthropic', 'subscription', anthropicModels);
+  const openaiList  = includeCurrent('openai',    'apiKey',       openaiModels);
+  const ollamaList  = includeCurrent('ollama',    'apiKey',       ollamaModels);
 
   return (
     <div className="field-group">
@@ -360,17 +411,30 @@ function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ol
         id={`${slotKey}-model`}
         className="text-input select-input"
         value={currentValue}
-        onChange={(e) => handleChange(e.target.value)}
+        onChange={(e) => onChange(decodeSlot(e.target.value))}
       >
-        <optgroup label="Anthropic">
-          {anthList.map((m) => (
-            <option key={m} value={`anthropic:${m}`}>{m}</option>
+        <optgroup label="Anthropic (API key)">
+          {anthApiList.map((m) => (
+            <option key={`a-api-${m}`} value={`anthropic:apiKey:${m}`}>{m}</option>
           ))}
         </optgroup>
+        <optgroup label="Anthropic (Claude Code subscription)">
+          {anthSubList.map((m) => (
+            <option key={`a-sub-${m}`} value={`anthropic:subscription:${m}`}>{m}</option>
+          ))}
+        </optgroup>
+        <optgroup label="OpenAI (API key)">
+          {openaiList.length > 0
+            ? openaiList.map((m) => (
+                <option key={`o-${m}`} value={`openai:apiKey:${m}`}>{m}</option>
+              ))
+            : <option disabled value="">Add OpenAI key to enable</option>
+          }
+        </optgroup>
         <optgroup label="Ollama">
-          {ollaList.length > 0
-            ? ollaList.map((m) => (
-                <option key={m} value={`ollama:${m}`}>{m}</option>
+          {ollamaList.length > 0
+            ? ollamaList.map((m) => (
+                <option key={`l-${m}`} value={`ollama:apiKey:${m}`}>{m}</option>
               ))
             : <option disabled value="">Fetch models first</option>
           }
@@ -381,24 +445,28 @@ function SlotModelSelect({ label, slotKey, config, onChange, anthropicModels, ol
 }
 
 function SettingsView({
-  apiKey: currentApiKey, slotConfig: currentSlotConfig,
+  apiKey: currentApiKey, openaiApiKey: currentOpenaiApiKey,
+  slotConfig: currentSlotConfig,
   ollamaUrl: currentOllamaUrl, ollamaApiKey: currentOllamaApiKey,
   sendTargets: currentSendTargets,
   onSave, onBack,
   theme, onToggleTheme,
 }) {
-  const [key,           setKey]           = useState('');
-  const [serverUrl,     setServerUrl]     = useState(currentOllamaUrl || 'http://localhost:11434');
-  const [ollamaKey,     setOllamaKey]     = useState('');
+  const [key,             setKey]             = useState('');
+  const [openaiKey,       setOpenaiKey]       = useState('');
+  const [serverUrl,       setServerUrl]       = useState(currentOllamaUrl || 'http://localhost:11434');
+  const [ollamaKey,       setOllamaKey]       = useState('');
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
-  const [ollamaModels,  setOllamaModels]  = useState([]);
-  const [fetchingModels, setFetchingModels] = useState(false);
-  const [fetchError,    setFetchError]    = useState('');
+  const [openaiModels,    setOpenaiModels]    = useState(FALLBACK_OPENAI_MODELS);
+  const [ollamaModels,    setOllamaModels]    = useState([]);
+  const [fetchingModels,  setFetchingModels]  = useState(false);
+  const [fetchError,      setFetchError]      = useState('');
+  const [cliStatus,       setCliStatus]       = useState(null); // null=loading, {installed, version?}
 
   const [slots, setSlots] = useState(currentSlotConfig || {
-    classify:       { provider: 'anthropic', model: FALLBACK_ANTHROPIC_MODELS[0] },
-    generateSimple: { provider: 'anthropic', model: FALLBACK_ANTHROPIC_MODELS[0] },
-    generateComplex:{ provider: 'anthropic', model: FALLBACK_ANTHROPIC_MODELS[0] },
+    classify:        defaultSlot('anthropic', FALLBACK_ANTHROPIC_MODELS[1]),
+    generateSimple:  defaultSlot('anthropic', FALLBACK_ANTHROPIC_MODELS[1]),
+    generateComplex: defaultSlot('anthropic', FALLBACK_ANTHROPIC_MODELS[0]),
   });
 
   const [targets, setTargets] = useState(currentSendTargets || []);
@@ -407,13 +475,23 @@ function SettingsView({
 
   const [saving, setSaving] = useState(false);
 
-  // Auto-fetch both Anthropic and Ollama models on mount
+  // Auto-fetch model lists + Claude CLI status on mount
   useEffect(() => {
     promptService.fetchAnthropicModels().then((result) => {
       if (result.success && result.models.length > 0) {
         setAnthropicModels(result.models);
       }
     }).catch(() => {});
+
+    promptService.fetchOpenaiModels().then((result) => {
+      if (result.success && result.models.length > 0) {
+        setOpenaiModels(result.models);
+      }
+    }).catch(() => {});
+
+    promptService.checkClaudeCliStatus()
+      .then(setCliStatus)
+      .catch(() => setCliStatus({ installed: false }));
 
     if (serverUrl) {
       handleFetchModels();
@@ -462,28 +540,41 @@ function SettingsView({
     setSaving(true);
     try {
       const trimmedKey = key.trim();
-      if (trimmedKey) await promptService.saveApiKey(trimmedKey);
+      const trimmedOpenaiKey = openaiKey.trim();
+      if (trimmedKey)       await promptService.saveApiKey(trimmedKey);
+      if (trimmedOpenaiKey) await promptService.saveOpenaiApiKey(trimmedOpenaiKey);
       await promptService.saveOllamaUrl(serverUrl);
       await promptService.saveOllamaApiKey(ollamaKey);
       await promptService.saveSlotConfig(slots);
       await promptService.saveSendTargets(targets);
       onSave({
-        apiKey: trimmedKey || currentApiKey,
-        slotConfig: slots,
-        ollamaUrl: serverUrl,
+        apiKey:       trimmedKey       || currentApiKey,
+        openaiApiKey: trimmedOpenaiKey || currentOpenaiApiKey,
+        slotConfig:   slots,
+        ollamaUrl:    serverUrl,
         ollamaApiKey: ollamaKey,
-        sendTargets: targets,
+        sendTargets:  targets,
       });
     } finally {
       setSaving(false);
     }
   }
 
-  // Can save if we have credentials for the providers in use
+  // Can save iff every slot has the credentials it needs.
   const hasAnthropicKey = !!(key.trim() || currentApiKey);
-  const usesAnthropic = Object.values(slots).some((s) => s?.provider === 'anthropic');
-  const usesOllama = Object.values(slots).some((s) => s?.provider === 'ollama');
-  const canSave = ((!usesAnthropic || hasAnthropicKey) && (!usesOllama || serverUrl)) && !saving;
+  const hasOpenaiKey    = !!(openaiKey.trim() || currentOpenaiApiKey);
+  const SLOT_KEYS = ['classify', 'generateSimple', 'generateComplex'];
+  const slotList = SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
+  const slotIsSatisfied = (s) => {
+    if (s.provider === 'ollama')    return !!serverUrl;
+    if (s.provider === 'openai')    return hasOpenaiKey;
+    if (s.provider === 'anthropic') return s.authMethod === 'subscription' || hasAnthropicKey;
+    return false;
+  };
+  const canSave = slotList.every(slotIsSatisfied) && !saving;
+  const usesSubscription = slotList.some(
+    (s) => s.provider === 'anthropic' && s.authMethod === 'subscription',
+  );
 
   return (
     <div className="settings-view">
@@ -534,6 +625,51 @@ function SettingsView({
             Encrypted with Windows DPAPI. <a className="link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Get a key</a>
           </p>
         </div>
+
+        {/* Shared OpenAI API Key */}
+        <div className="field-group">
+          <label className="field-label" htmlFor="openai-key-input">
+            OpenAI API Key
+          </label>
+          <input
+            id="openai-key-input"
+            type="password"
+            className="text-input"
+            placeholder={currentOpenaiApiKey ? '••••••••  (saved)' : 'sk-...'}
+            value={openaiKey}
+            onChange={(e) => setOpenaiKey(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="settings-desc" style={{ textAlign: 'left', padding: 0, marginTop: 2 }}>
+            Encrypted with Windows DPAPI. <a className="link" href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">Get a key</a>
+          </p>
+        </div>
+
+        {/* Claude Code subscription status — only relevant when a slot uses it */}
+        {usesSubscription && (
+          <div className="field-group" style={{ marginTop: -4 }}>
+            {cliStatus === null && (
+              <p className="settings-desc" style={{ textAlign: 'left', padding: 0 }}>
+                Checking Claude Code CLI…
+              </p>
+            )}
+            {cliStatus && cliStatus.installed && (
+              <p className="settings-desc" style={{ textAlign: 'left', padding: 0, color: '#4ade80' }}>
+                ✓ Claude Code detected{cliStatus.version ? ` (${cliStatus.version})` : ''} — subscription auth enabled.
+              </p>
+            )}
+            {cliStatus && !cliStatus.installed && (
+              <p className="settings-desc" style={{ textAlign: 'left', padding: 0, color: '#f59e0b' }}>
+                ⚠ Claude Code CLI not detected. <a
+                  className="link"
+                  href="https://docs.claude.com/en/docs/claude-code/setup"
+                  target="_blank" rel="noreferrer"
+                >Install &amp; sign in</a> to use the subscription auth path.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Shared Ollama Config */}
         <div className="field-group">
@@ -590,6 +726,7 @@ function SettingsView({
           config={slots.classify}
           onChange={(v) => updateSlot('classify', v)}
           anthropicModels={anthropicModels}
+          openaiModels={openaiModels}
           ollamaModels={ollamaModels}
         />
         <SlotModelSelect
@@ -598,6 +735,7 @@ function SettingsView({
           config={slots.generateSimple}
           onChange={(v) => updateSlot('generateSimple', v)}
           anthropicModels={anthropicModels}
+          openaiModels={openaiModels}
           ollamaModels={ollamaModels}
         />
         <SlotModelSelect
@@ -606,6 +744,7 @@ function SettingsView({
           config={slots.generateComplex}
           onChange={(v) => updateSlot('generateComplex', v)}
           anthropicModels={anthropicModels}
+          openaiModels={openaiModels}
           ollamaModels={ollamaModels}
         />
 
@@ -666,7 +805,7 @@ function SettingsView({
 
 // ── MainView ──────────────────────────────────────────────────────────────────
 
-function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
+function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
   const [task,         setTask]         = useState('');
   const [loading,      setLoading]      = useState(false);
   const [loadingStep,  setLoadingStep]  = useState('');
@@ -679,12 +818,17 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
   const [showHistory,  setShowHistory]  = useState(false);
   const [toast,        setToast]        = useState('');
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
+  const [openaiModels, setOpenaiModels] = useState(FALLBACK_OPENAI_MODELS);
   const [ollamaModels, setOllamaModels] = useState([]);
 
-  // Fetch both model lists for the override row
+  // Fetch all three model lists for the override row
   useEffect(() => {
     promptService.fetchAnthropicModels().then((result) => {
       if (result.success && result.models.length > 0) setAnthropicModels(result.models);
+    }).catch(() => {});
+
+    promptService.fetchOpenaiModels().then((result) => {
+      if (result.success && result.models.length > 0) setOpenaiModels(result.models);
     }).catch(() => {});
 
     if (ollamaUrl) {
@@ -692,7 +836,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
         if (result.success) setOllamaModels(result.models);
       });
     }
-  }, [ollamaUrl, ollamaApiKey]);
+  }, [ollamaUrl, ollamaApiKey, openaiApiKey]);
 
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
@@ -754,10 +898,10 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
     setHistory([]);
   }
 
-  async function handleSlotChange(slotKey, provider, model) {
+  async function handleSlotChange(slotKey, decoded) {
     const updated = {
       ...slotConfig,
-      [slotKey]: { provider, model },
+      [slotKey]: decoded,
     };
     setSlotConfig(updated);
     await promptService.saveSlotConfig(updated);
@@ -873,6 +1017,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
                   slotKey="classify"
                   config={slotConfig?.classify}
                   anthropicModels={anthropicModels}
+                  openaiModels={openaiModels}
                   ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
@@ -881,6 +1026,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
                   slotKey="generateSimple"
                   config={slotConfig?.generateSimple}
                   anthropicModels={anthropicModels}
+                  openaiModels={openaiModels}
                   ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
@@ -889,6 +1035,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
                   slotKey="generateComplex"
                   config={slotConfig?.generateComplex}
                   anthropicModels={anthropicModels}
+                  openaiModels={openaiModels}
                   ollamaModels={ollamaModels}
                   onChange={handleSlotChange}
                 />
@@ -925,22 +1072,25 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, sendTarg
 
 // ── OverrideSlot ──────────────────────────────────────────────────────────────
 
-function OverrideSlot({ label, slotKey, config, anthropicModels = [], ollamaModels = [], onChange }) {
-  const currentValue = config ? `${config.provider}:${config.model}` : '';
+function OverrideSlot({
+  label, slotKey, config,
+  anthropicModels = [], openaiModels = [], ollamaModels = [],
+  onChange,
+}) {
+  const currentValue = encodeSlot(config);
 
-  function handleChange(encoded) {
-    const sep = encoded.indexOf(':');
-    const provider = encoded.slice(0, sep);
-    const model = encoded.slice(sep + 1);
-    onChange(slotKey, provider, model);
-  }
+  const includeCurrent = (provider, authMethod, list) => {
+    const isHere =
+      config?.provider === provider &&
+      (config.authMethod || 'apiKey') === authMethod &&
+      config.model && !list.includes(config.model);
+    return isHere ? [config.model, ...list] : list;
+  };
 
-  const anthList = config?.provider === 'anthropic' && config.model && !anthropicModels.includes(config.model)
-    ? [config.model, ...anthropicModels]
-    : anthropicModels;
-  const ollaList = config?.provider === 'ollama' && config.model && !ollamaModels.includes(config.model)
-    ? [config.model, ...ollamaModels]
-    : ollamaModels;
+  const anthApiList = includeCurrent('anthropic', 'apiKey',       anthropicModels);
+  const anthSubList = includeCurrent('anthropic', 'subscription', anthropicModels);
+  const openaiList  = includeCurrent('openai',    'apiKey',       openaiModels);
+  const ollamaList  = includeCurrent('ollama',    'apiKey',       ollamaModels);
 
   return (
     <div className="override-slot">
@@ -948,17 +1098,29 @@ function OverrideSlot({ label, slotKey, config, anthropicModels = [], ollamaMode
       <select
         className="override-select"
         value={currentValue}
-        onChange={(e) => handleChange(e.target.value)}
+        onChange={(e) => onChange(slotKey, decodeSlot(e.target.value))}
       >
-        <optgroup label="Anthropic">
-          {anthList.map((m) => (
-            <option key={m} value={`anthropic:${m}`}>{m}</option>
+        <optgroup label="Anthropic (API)">
+          {anthApiList.map((m) => (
+            <option key={`a-api-${m}`} value={`anthropic:apiKey:${m}`}>{m}</option>
           ))}
         </optgroup>
-        {ollaList.length > 0 && (
+        <optgroup label="Anthropic (Claude Code)">
+          {anthSubList.map((m) => (
+            <option key={`a-sub-${m}`} value={`anthropic:subscription:${m}`}>{m}</option>
+          ))}
+        </optgroup>
+        {openaiList.length > 0 && (
+          <optgroup label="OpenAI">
+            {openaiList.map((m) => (
+              <option key={`o-${m}`} value={`openai:apiKey:${m}`}>{m}</option>
+            ))}
+          </optgroup>
+        )}
+        {ollamaList.length > 0 && (
           <optgroup label="Ollama">
-            {ollaList.map((m) => (
-              <option key={m} value={`ollama:${m}`}>{m}</option>
+            {ollamaList.map((m) => (
+              <option key={`l-${m}`} value={`ollama:apiKey:${m}`}>{m}</option>
             ))}
           </optgroup>
         )}
