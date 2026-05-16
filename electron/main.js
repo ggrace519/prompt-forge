@@ -97,6 +97,37 @@ function extractJSON(text) {
   return text.trim();
 }
 
+// ── Image / video section maps (CJS mirror of src/lib/utils.js) ───────────────
+
+const IMAGE_SECTIONS_CJS = [
+  { key: 'subject',        header: '## Subject' },
+  { key: 'style',          header: '## Style' },
+  { key: 'composition',    header: '## Composition' },
+  { key: 'lighting',       header: '## Lighting' },
+  { key: 'mood',           header: '## Mood' },
+  { key: 'technical',      header: '## Technical' },
+  { key: 'negativePrompt', header: '## Negative Prompt' },
+];
+
+const VIDEO_SECTIONS_CJS = [
+  { key: 'subject',        header: '## Subject' },
+  { key: 'action',         header: '## Action' },
+  { key: 'cameraMotion',   header: '## Camera Motion' },
+  { key: 'style',          header: '## Style' },
+  { key: 'lighting',       header: '## Lighting' },
+  { key: 'mood',           header: '## Mood' },
+  { key: 'pacing',         header: '## Pacing' },
+  { key: 'negativePrompt', header: '## Negative Prompt' },
+];
+
+function assembleSectionsCJS(result, sections) {
+  if (!result) return '';
+  return sections
+    .filter(({ key }) => typeof result[key] === 'string' && result[key].trim())
+    .map(({ key, header }) => `${header}\n\n${result[key].trim()}`)
+    .join('\n\n');
+}
+
 // ── Config Migration ─────────────────────────────────────────────────────────
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
