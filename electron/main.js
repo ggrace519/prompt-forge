@@ -836,9 +836,12 @@ app.whenReady().then(() => {
   ipcMain.handle('close-window',    () => win.hide());
   ipcMain.handle('minimize-window', () => win.hide());
 
-  // Renderer requests a height change (e.g. after results load)
-  ipcMain.handle('resize-window', (_event, height) => {
-    win.setSize(480, height, false);
+  // Renderer requests a window resize. Accepts either a number (height only,
+  // backwards compatible — width stays at 480) or an object {width, height}.
+  ipcMain.handle('resize-window', (_event, arg) => {
+    const width  = (typeof arg === 'object' && arg && typeof arg.width  === 'number') ? arg.width  : 480;
+    const height = (typeof arg === 'object' && arg && typeof arg.height === 'number') ? arg.height : arg;
+    win.setSize(width, height, false);
     const { x, y } = getWindowPosition();
     win.setPosition(x, y, false);
   });

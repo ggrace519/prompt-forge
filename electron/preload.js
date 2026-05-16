@@ -80,8 +80,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('close-window'),
   minimizeWindow: () =>
     ipcRenderer.invoke('minimize-window'),
-  resizeWindow: (height) =>
-    ipcRenderer.invoke('resize-window', height),
+  resizeWindow: (arg) =>
+    ipcRenderer.invoke('resize-window', arg),
 
   // Theme
   getTheme: () =>
