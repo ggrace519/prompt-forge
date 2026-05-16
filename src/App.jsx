@@ -53,6 +53,8 @@ const TIER_COLORS = {
   simple:   { bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.3)', text: '#4ade80' },
   standard: { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', text: '#f59e0b' },
   complex:  { bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.3)', text: '#fbbf24' },
+  image:    { bg: 'rgba(34, 211, 238, 0.12)', border: 'rgba(34, 211, 238, 0.3)', text: '#22d3ee' },
+  video:    { bg: 'rgba(167, 139, 250, 0.12)', border: 'rgba(167, 139, 250, 0.3)', text: '#a78bfa' },
 };
 
 // ── Icon components ───────────────────────────────────────────────────────────
@@ -224,6 +226,32 @@ function IconMoon() {
       aria-hidden="true">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
     </svg>
+  );
+}
+
+// ── ModeToggle ────────────────────────────────────────────────────────────────
+
+const MODES = [
+  { key: 'text',  label: 'Text'  },
+  { key: 'image', label: 'Image' },
+  { key: 'video', label: 'Video' },
+];
+
+export function ModeToggle({ mode, onChange }) {
+  return (
+    <div className="mode-toggle" role="group" aria-label="Output mode">
+      {MODES.map((m) => (
+        <button
+          key={m.key}
+          type="button"
+          className={`mode-toggle-btn${mode === m.key ? ' active' : ''}`}
+          aria-pressed={mode === m.key}
+          onClick={() => onChange(m.key)}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

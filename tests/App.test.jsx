@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from '../src/App.jsx';
 
 // ── Mock the entire service layer ─────────────────────────────────────────────
@@ -332,5 +333,33 @@ describe('App — theme toggle', () => {
 
     expect(document.documentElement.classList.contains('light')).toBe(false);
     expect(promptService.saveTheme).toHaveBeenCalledWith('dark');
+  });
+});
+
+// ── ModeToggle ────────────────────────────────────────────────────────────────
+
+import { ModeToggle } from '../src/App.jsx';
+
+describe('ModeToggle', () => {
+  it('renders three options and highlights the current mode', () => {
+    const { getByRole } = render(
+      <ModeToggle mode="image" onChange={() => {}} />
+    );
+    const text  = getByRole('button', { name: /text/i });
+    const image = getByRole('button', { name: /image/i });
+    const video = getByRole('button', { name: /video/i });
+
+    expect(text).toBeInTheDocument();
+    expect(image).toHaveAttribute('aria-pressed', 'true');
+    expect(video).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('calls onChange with the picked mode', async () => {
+    const onChange = vi.fn();
+    const { getByRole } = render(
+      <ModeToggle mode="text" onChange={onChange} />
+    );
+    await userEvent.click(getByRole('button', { name: /image/i }));
+    expect(onChange).toHaveBeenCalledWith('image');
   });
 });

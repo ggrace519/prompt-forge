@@ -250,14 +250,22 @@ button, label, span, h1, p {
 /* Reduced from 220px — this window is 380px wide, the logo was eating too much vertical space */
 .app-logo {
   width: 180px;
-  height: auto;
+  height: 180px;
   display: block;
   margin: 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: scale(1.12);
+  background: var(--bg);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3), 0 0 40px rgba(245, 158, 11, 0.1);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
 }
 
 .app-logo-sm {
   height: 22px;
   width: auto;
+  border-radius: 50%;
+  background: var(--bg);
 }
 
 .settings-desc {
@@ -1057,6 +1065,50 @@ button, label, span, h1, p {
 .tier-dot.tier-simple   { background: #4ade80; }
 .tier-dot.tier-standard { background: var(--accent); }
 .tier-dot.tier-complex  { background: #fbbf24; }
+
+/* Image and video tier badges (used in history) */
+.tier-image {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.3);
+  color: #22d3ee;
+}
+.tier-video {
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.3);
+  color: #a78bfa;
+}
+.tier-dot.tier-image { background: #22d3ee; }
+.tier-dot.tier-video { background: #a78bfa; }
+
+/* Mode toggle (Text / Image / Video) */
+.mode-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-2, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.mode-toggle-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mode-toggle-btn:hover {
+  color: var(--text, #e5e5e5);
+}
+.mode-toggle-btn.active {
+  background: var(--accent, #f59e0b);
+  color: #000;
+}
 
 /* ── Override row ──────────────────────────────────────────────────────────── */
 
