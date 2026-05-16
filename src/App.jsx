@@ -255,6 +255,30 @@ export function ModeToggle({ mode, onChange }) {
   );
 }
 
+// ── AspectRatioSelect ─────────────────────────────────────────────────────────
+
+const ASPECT_RATIOS = ['16:9', '1:1', '9:16', '4:3', '21:9'];
+
+function AspectRatioSelect({ value, onChange }) {
+  return (
+    <div className="aspect-ratio-select">
+      <label className="aspect-ratio-label" htmlFor="aspect-ratio">
+        Aspect ratio
+      </label>
+      <select
+        id="aspect-ratio"
+        className="text-input select-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {ASPECT_RATIOS.map((r) => (
+          <option key={r} value={r}>{r}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ── Shared components ─────────────────────────────────────────────────────────
 
 function WindowControls() {
@@ -1132,6 +1156,9 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
               sendTargets={sendTargets}
               toast={toast}
               setToast={setToast}
+              mode={mode}
+              aspectRatio={aspectRatio}
+              onAspectRatioChange={handleAspectRatioChange}
             />
           )}
         </div>

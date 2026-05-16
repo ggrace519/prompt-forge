@@ -1453,3 +1453,22 @@ button, label, span, h1, p {
   align-items: center;
   gap: 4px;
 }
+
+/* Aspect ratio dropdown */
+.aspect-ratio-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.aspect-ratio-label {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+}
+.aspect-ratio-select .select-input {
+  flex: 1;
+  max-width: 120px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
