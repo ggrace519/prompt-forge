@@ -347,7 +347,7 @@ describe('App — theme toggle', () => {
 
 // ── ModeToggle ────────────────────────────────────────────────────────────────
 
-import { ModeToggle } from '../src/App.jsx';
+import { ModeToggle, ResultsPanel } from '../src/App.jsx';
 
 describe('ModeToggle', () => {
   it('renders three options and highlights the current mode', () => {
@@ -370,5 +370,58 @@ describe('ModeToggle', () => {
     );
     await userEvent.click(getByRole('button', { name: /image/i }));
     expect(onChange).toHaveBeenCalledWith('image');
+  });
+});
+
+// ── Image-mode ResultsPanel ───────────────────────────────────────────────────
+
+describe('Image-mode ResultsPanel', () => {
+  it('renders image breakdown labels for image-mode results', () => {
+    const result = {
+      subject: 'A red fox',
+      style: 'Watercolor',
+      assembled: 'A watercolor painting of a red fox in a snowy meadow',
+    };
+
+    const { getByText, queryByText } = render(
+      <ResultsPanel
+        result={result}
+        tier="image"
+        activeTab="breakdown"
+        onTabChange={() => {}}
+        onTierChange={() => {}}
+        sendTargets={[]}
+        toast=""
+        setToast={() => {}}
+        mode="image"
+        aspectRatio="16:9"
+        onAspectRatioChange={() => {}}
+      />
+    );
+
+    expect(getByText('Subject')).toBeInTheDocument();
+    expect(getByText('Style')).toBeInTheDocument();
+    // Tier badge should be hidden in media modes
+    expect(queryByText(/^Image$/)).toBeNull();
+  });
+
+  it('appends aspect ratio in assembled view', () => {
+    const result = { assembled: 'A red fox in a meadow' };
+    const { container } = render(
+      <ResultsPanel
+        result={result}
+        tier="image"
+        activeTab="assembled"
+        onTabChange={() => {}}
+        onTierChange={() => {}}
+        sendTargets={[]}
+        toast=""
+        setToast={() => {}}
+        mode="image"
+        aspectRatio="16:9"
+        onAspectRatioChange={() => {}}
+      />
+    );
+    expect(container.textContent).toContain('--ar 16:9');
   });
 });

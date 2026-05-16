@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as promptService from './lib/promptService';
 import logoUrl from './assets/logo.png';
+import { IMAGE_SECTIONS, VIDEO_SECTIONS, appendAspectRatio } from './lib/utils.js';
 
 const SECTIONS = [
   { key: 'role',          label: 'Role & Objective'  },
@@ -1282,7 +1283,20 @@ function HistoryPanel({ history, onRestore, onClear, onClose }) {
 
 // ── ResultsPanel ──────────────────────────────────────────────────────────────
 
-function ResultsPanel({ result, tier, activeTab, onTabChange, onTierChange, sendTargets, toast, setToast }) {
+export function ResultsPanel({
+  result, tier, activeTab, onTabChange, onTierChange,
+  sendTargets, toast, setToast,
+  mode, aspectRatio, onAspectRatioChange,
+}) {
+  const isMedia = mode === 'image' || mode === 'video';
+  const sections = mode === 'image' ? IMAGE_SECTIONS
+                : mode === 'video' ? VIDEO_SECTIONS
+                : SECTIONS;
+
+  const displayedAssembled = isMedia
+    ? appendAspectRatio(result.assembled, aspectRatio)
+    : result.assembled;
+
   return (
     <div className="results-panel">
       <div className="tab-bar" role="tablist">
@@ -1302,20 +1316,25 @@ function ResultsPanel({ result, tier, activeTab, onTabChange, onTierChange, send
         >
           Breakdown
         </button>
-        {tier && (
+        {tier && !isMedia && (
           <TierBadgeDropdown tier={tier} onTierChange={onTierChange} />
         )}
       </div>
 
       <div className="tab-content">
         {activeTab === 'assembled' && (
-          <AssembledTab
-            assembled={result.assembled}
-            sendTargets={sendTargets}
-            setToast={setToast}
-          />
+          <>
+            {isMedia && (
+              <AspectRatioSelect value={aspectRatio} onChange={onAspectRatioChange} />
+            )}
+            <AssembledTab
+              assembled={displayedAssembled}
+              sendTargets={sendTargets}
+              setToast={setToast}
+            />
+          </>
         )}
-        {activeTab === 'breakdown' && <BreakdownTab result={result} />}
+        {activeTab === 'breakdown' && <BreakdownTab result={result} sections={sections} />}
       </div>
     </div>
   );
@@ -1413,14 +1432,14 @@ function AssembledTab({ assembled, sendTargets, setToast }) {
 
 // ── BreakdownTab ──────────────────────────────────────────────────────────────
 
-function BreakdownTab({ result }) {
+function BreakdownTab({ result, sections = SECTIONS }) {
   const [expanded, setExpanded] = useState({});
 
   function toggle(key) {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  const populatedSections = SECTIONS.filter(({ key }) => result[key]?.trim());
+  const populatedSections = sections.filter(({ key }) => result[key]?.trim());
 
   return (
     <div className="breakdown-tab">
