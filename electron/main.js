@@ -490,12 +490,13 @@ app.whenReady().then(() => {
   // ── IPC Handlers ───────────────────────────────────────────────────────────
 
   // Generate a structured prompt — classify-then-generate two-call flow
-  ipcMain.handle('generate-prompt', async (_event, { task, tier: explicitTier }) => {
+  ipcMain.handle('generate-prompt', async (_event, { task, tier: explicitTier, mode }) => {
     try {
-      let tier = explicitTier;
+      const isMedia = mode === 'image' || mode === 'video';
+      let tier = isMedia ? mode : explicitTier;
       let classifyCreds = null;
 
-      // Step 1: Classify (unless tier was provided by the user)
+      // Step 1: Classify (text mode only; media modes skip classify entirely)
       if (!tier) {
         classifyCreds = getSlotCredentials('classify');
         try {
@@ -606,20 +607,30 @@ app.whenReady().then(() => {
 
       const parsed = parseModelJSON(textContent);
 
-      // Build the assembled prompt from individual fields
-      const sectionMap = [
-        ['role',          '## Role'],
-        ['instructions',  '## Instructions'],
-        ['context',       '## Context'],
-        ['outputFormat',  '## Output Format'],
-        ['reasoning',     '## Reasoning Steps'],
-        ['examples',      '## Examples'],
-        ['reinforcement', '## Remember'],
-      ];
-      parsed.assembled = sectionMap
-        .filter(([key]) => parsed[key]?.trim())
-        .map(([key, header]) => `${header}\n\n${parsed[key].trim()}`)
-        .join('\n\n');
+      // Build the assembled prompt from individual fields if the model didn't
+      // already produce one. Image/video templates ask the model to populate
+      // `assembled` itself; text templates do not.
+      if (!parsed.assembled || !String(parsed.assembled).trim()) {
+        if (tier === 'image') {
+          parsed.assembled = assembleSectionsCJS(parsed, IMAGE_SECTIONS_CJS);
+        } else if (tier === 'video') {
+          parsed.assembled = assembleSectionsCJS(parsed, VIDEO_SECTIONS_CJS);
+        } else {
+          const textSectionMap = [
+            ['role',          '## Role'],
+            ['instructions',  '## Instructions'],
+            ['context',       '## Context'],
+            ['outputFormat',  '## Output Format'],
+            ['reasoning',     '## Reasoning Steps'],
+            ['examples',      '## Examples'],
+            ['reinforcement', '## Remember'],
+          ];
+          parsed.assembled = textSectionMap
+            .filter(([key]) => parsed[key]?.trim())
+            .map(([key, header]) => `${header}\n\n${parsed[key].trim()}`)
+            .join('\n\n');
+        }
+      }
 
       return {
         success: true,
