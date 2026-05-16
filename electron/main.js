@@ -846,6 +846,25 @@ app.whenReady().then(() => {
     win.setPosition(x, y, false);
   });
 
+  // ── Mode + aspect-ratio persistence ────────────────────────────────────────
+  ipcMain.handle('get-last-mode', () => store.get('lastMode', 'text'));
+  ipcMain.handle('save-last-mode', (_event, mode) => {
+    if (['text', 'image', 'video'].includes(mode)) store.set('lastMode', mode);
+    return true;
+  });
+
+  ipcMain.handle('get-last-aspect-ratio', (_event, mode) => {
+    if (mode === 'image') return store.get('lastAspectRatio.image', '1:1');
+    if (mode === 'video') return store.get('lastAspectRatio.video', '16:9');
+    return '';
+  });
+  ipcMain.handle('save-last-aspect-ratio', (_event, { mode, ratio }) => {
+    if (mode === 'image' || mode === 'video') {
+      store.set(`lastAspectRatio.${mode}`, ratio);
+    }
+    return true;
+  });
+
   // ── Theme ──────────────────────────────────────────────────────────────────
   ipcMain.handle('get-theme', () => store.get('theme', 'dark'));
 

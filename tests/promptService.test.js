@@ -205,3 +205,89 @@ describe('when electronAPI is not present', () => {
       .rejects.toThrow('electronAPI bridge unavailable');
   });
 });
+
+// ── generatePrompt with mode ──────────────────────────────────────────────────
+
+describe('generatePrompt with mode', () => {
+  it('passes mode in the IPC payload when provided', async () => {
+    mockIPC.generatePrompt.mockResolvedValue({
+      success: true,
+      data: { subject: 'A red fox', assembled: 'A red fox in a meadow' },
+      tier: 'image',
+      generateProvider: 'anthropic',
+      generateModel: 'claude-haiku-4-5-20251001',
+    });
+
+    await promptService.generatePrompt('a fox', undefined, 'image');
+
+    expect(mockIPC.generatePrompt).toHaveBeenCalledWith({
+      task: 'a fox',
+      tier: undefined,
+      mode: 'image',
+    });
+  });
+
+  it('omits mode when not provided (text mode default)', async () => {
+    mockIPC.generatePrompt.mockResolvedValue({
+      success: true,
+      data: { role: 'Assistant' },
+      tier: 'simple',
+      generateProvider: 'anthropic',
+      generateModel: 'claude-haiku-4-5-20251001',
+    });
+
+    await promptService.generatePrompt('write a haiku');
+
+    expect(mockIPC.generatePrompt).toHaveBeenCalledWith({
+      task: 'write a haiku',
+      tier: undefined,
+      mode: undefined,
+    });
+  });
+});
+
+// ── Mode + aspect-ratio persistence ──────────────────────────────────────────
+
+describe('mode and aspect-ratio persistence', () => {
+  beforeEach(() => {
+    mockIPC.getLastMode = vi.fn();
+    mockIPC.saveLastMode = vi.fn();
+    mockIPC.getLastAspectRatio = vi.fn();
+    mockIPC.saveLastAspectRatio = vi.fn();
+  });
+
+  it('forwards getLastMode and saveLastMode', async () => {
+    mockIPC.getLastMode.mockResolvedValue('image');
+    expect(await promptService.getLastMode()).toBe('image');
+
+    await promptService.saveLastMode('video');
+    expect(mockIPC.saveLastMode).toHaveBeenCalledWith('video');
+  });
+
+  it('forwards getLastAspectRatio and saveLastAspectRatio per mode', async () => {
+    mockIPC.getLastAspectRatio.mockResolvedValue('16:9');
+    expect(await promptService.getLastAspectRatio('image')).toBe('16:9');
+    expect(mockIPC.getLastAspectRatio).toHaveBeenCalledWith('image');
+
+    await promptService.saveLastAspectRatio('video', '9:16');
+    expect(mockIPC.saveLastAspectRatio).toHaveBeenCalledWith('video', '9:16');
+  });
+});
+
+// ── resizeWindow ──────────────────────────────────────────────────────────────
+
+describe('resizeWindow', () => {
+  beforeEach(() => {
+    mockIPC.resizeWindow = vi.fn();
+  });
+
+  it('forwards a numeric height (backwards compatible)', async () => {
+    await promptService.resizeWindow(640);
+    expect(mockIPC.resizeWindow).toHaveBeenCalledWith(640);
+  });
+
+  it('forwards a {width, height} object', async () => {
+    await promptService.resizeWindow({ width: 640, height: 720 });
+    expect(mockIPC.resizeWindow).toHaveBeenCalledWith({ width: 640, height: 720 });
+  });
+});

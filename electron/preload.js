@@ -83,6 +83,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resizeWindow: (arg) =>
     ipcRenderer.invoke('resize-window', arg),
 
+  // Mode + aspect-ratio persistence
+  getLastMode: () =>
+    ipcRenderer.invoke('get-last-mode'),
+  saveLastMode: (mode) =>
+    ipcRenderer.invoke('save-last-mode', mode),
+  getLastAspectRatio: (mode) =>
+    ipcRenderer.invoke('get-last-aspect-ratio', mode),
+  saveLastAspectRatio: (mode, ratio) =>
+    ipcRenderer.invoke('save-last-aspect-ratio', { mode, ratio }),
+
   // Theme
   getTheme: () =>
     ipcRenderer.invoke('get-theme'),
