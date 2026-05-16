@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractJSON, parseModelJSON } from '../src/lib/utils.js';
+import { extractJSON, parseModelJSON, appendAspectRatio, assembleSections, IMAGE_SECTIONS, VIDEO_SECTIONS } from '../src/lib/utils.js';
 
 // ── Happy paths ───────────────────────────────────────────────────────────────
 
@@ -99,5 +99,55 @@ describe('extractJSON — edge cases', () => {
     const result = extractJSON('text { no close');
     // start=5, end=5 (same), end > start is false → falls through to trim
     expect(result).toBe('text { no close');
+  });
+});
+
+describe('appendAspectRatio', () => {
+  it('appends --ar suffix on a new line when ratio is set', () => {
+    expect(appendAspectRatio('a sunset over mountains', '16:9'))
+      .toBe('a sunset over mountains\n--ar 16:9');
+  });
+
+  it('returns the assembled string unchanged when ratio is empty', () => {
+    expect(appendAspectRatio('a sunset', '')).toBe('a sunset');
+    expect(appendAspectRatio('a sunset', null)).toBe('a sunset');
+    expect(appendAspectRatio('a sunset', undefined)).toBe('a sunset');
+  });
+
+  it('returns empty string when assembled is empty', () => {
+    expect(appendAspectRatio('', '16:9')).toBe('');
+    expect(appendAspectRatio(null, '16:9')).toBe('');
+  });
+
+  it('does not double-append when --ar already present', () => {
+    expect(appendAspectRatio('a sunset --ar 16:9', '16:9'))
+      .toBe('a sunset --ar 16:9');
+  });
+});
+
+describe('assembleSections', () => {
+  it('joins populated sections in order with headers', () => {
+    const result = {
+      subject: 'A red fox',
+      style: 'Watercolor',
+      lighting: 'Golden hour',
+    };
+    const out = assembleSections(result, IMAGE_SECTIONS);
+    expect(out).toContain('## Subject\n\nA red fox');
+    expect(out).toContain('## Style\n\nWatercolor');
+    expect(out).toContain('## Lighting\n\nGolden hour');
+    expect(out.indexOf('Subject')).toBeLessThan(out.indexOf('Style'));
+  });
+
+  it('skips empty / whitespace-only fields', () => {
+    const result = { subject: 'A red fox', style: '   ', lighting: '' };
+    const out = assembleSections(result, IMAGE_SECTIONS);
+    expect(out).toContain('Subject');
+    expect(out).not.toContain('Style');
+    expect(out).not.toContain('Lighting');
+  });
+
+  it('returns empty string when nothing is populated', () => {
+    expect(assembleSections({}, IMAGE_SECTIONS)).toBe('');
   });
 });

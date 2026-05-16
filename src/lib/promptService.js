@@ -21,13 +21,14 @@ function getIPC() {
 }
 
 /**
- * Generate a structured AI prompt for the given task.
- * @param {string} task  Plain-language description of the AI task
- * @param {string} [tier]  Optional tier override — skips classification when provided
+ * Generate a structured AI prompt.
+ * @param {string} task   Plain-language task description
+ * @param {string} [tier] Optional tier override — text mode only
+ * @param {'text'|'image'|'video'} [mode] Output mode — defaults to text in main process
  * @returns {Promise<{ success: boolean, data: object, tier: string, classifyProvider?: string, classifyModel?: string, generateProvider: string, generateModel: string }>}
  */
-export async function generatePrompt(task, tier) {
-  const result = await getIPC().generatePrompt({ task, tier });
+export async function generatePrompt(task, tier, mode) {
+  const result = await getIPC().generatePrompt({ task, tier, mode });
   if (!result.success) {
     throw new Error(result.error || 'Unknown error from main process');
   }
@@ -42,6 +43,26 @@ export async function saveApiKey(key) {
 
 export async function getApiKey() {
   return getIPC().getApiKey();
+}
+
+// ── Shared OpenAI key ───────────────────────────────────────────────────────
+
+export async function saveOpenaiApiKey(key) {
+  return getIPC().saveOpenaiApiKey(key);
+}
+
+export async function getOpenaiApiKey() {
+  return getIPC().getOpenaiApiKey();
+}
+
+export async function fetchOpenaiModels() {
+  return getIPC().fetchOpenaiModels();
+}
+
+// ── Claude Code CLI (for subscription auth) ─────────────────────────────────
+
+export async function checkClaudeCliStatus() {
+  return getIPC().checkClaudeCliStatus();
 }
 
 // ── Clipboard ───────────────────────────────────────────────────────────────
@@ -126,4 +147,22 @@ export async function minimizeWindow() {
 
 export async function resizeWindow(height) {
   return getIPC().resizeWindow(height);
+}
+
+// ── Mode + aspect-ratio persistence ─────────────────────────────────────────
+
+export async function getLastMode() {
+  return getIPC().getLastMode();
+}
+
+export async function saveLastMode(mode) {
+  return getIPC().saveLastMode(mode);
+}
+
+export async function getLastAspectRatio(mode) {
+  return getIPC().getLastAspectRatio(mode);
+}
+
+export async function saveLastAspectRatio(mode, ratio) {
+  return getIPC().saveLastAspectRatio(mode, ratio);
 }

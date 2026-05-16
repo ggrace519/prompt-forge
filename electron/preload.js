@@ -23,6 +23,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getApiKey: () =>
     ipcRenderer.invoke('get-api-key'),
 
+  // Shared OpenAI key
+  saveOpenaiApiKey: (key) =>
+    ipcRenderer.invoke('save-openai-api-key', key),
+  getOpenaiApiKey: () =>
+    ipcRenderer.invoke('get-openai-api-key'),
+  fetchOpenaiModels: () =>
+    ipcRenderer.invoke('fetch-openai-models'),
+
+  // Claude Code CLI status (for subscription auth)
+  checkClaudeCliStatus: () =>
+    ipcRenderer.invoke('check-claude-cli-status'),
+
   // Clipboard
   copyToClipboard: (text) =>
     ipcRenderer.invoke('copy-to-clipboard', text),
@@ -68,8 +80,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('close-window'),
   minimizeWindow: () =>
     ipcRenderer.invoke('minimize-window'),
-  resizeWindow: (height) =>
-    ipcRenderer.invoke('resize-window', height),
+  resizeWindow: (arg) =>
+    ipcRenderer.invoke('resize-window', arg),
+
+  // Mode + aspect-ratio persistence
+  getLastMode: () =>
+    ipcRenderer.invoke('get-last-mode'),
+  saveLastMode: (mode) =>
+    ipcRenderer.invoke('save-last-mode', mode),
+  getLastAspectRatio: (mode) =>
+    ipcRenderer.invoke('get-last-aspect-ratio', mode),
+  saveLastAspectRatio: (mode, ratio) =>
+    ipcRenderer.invoke('save-last-aspect-ratio', { mode, ratio }),
 
   // Theme
   getTheme: () =>

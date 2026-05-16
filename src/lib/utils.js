@@ -106,3 +106,56 @@ export function parseModelJSON(text) {
 
   return JSON.parse(chars.join(''));
 }
+
+// Section maps for image and video modes — used to build the assembled paragraph
+// when the model returns fields without one, and to drive the breakdown UI.
+export const IMAGE_SECTIONS = [
+  { key: 'subject',        label: 'Subject',         header: '## Subject' },
+  { key: 'style',          label: 'Style',           header: '## Style' },
+  { key: 'composition',    label: 'Composition',     header: '## Composition' },
+  { key: 'lighting',       label: 'Lighting',        header: '## Lighting' },
+  { key: 'mood',           label: 'Mood',            header: '## Mood' },
+  { key: 'technical',      label: 'Technical',       header: '## Technical' },
+  { key: 'negativePrompt', label: 'Negative Prompt', header: '## Negative Prompt' },
+];
+
+export const VIDEO_SECTIONS = [
+  { key: 'subject',        label: 'Subject',         header: '## Subject' },
+  { key: 'action',         label: 'Action',          header: '## Action' },
+  { key: 'cameraMotion',   label: 'Camera Motion',   header: '## Camera Motion' },
+  { key: 'style',          label: 'Style',           header: '## Style' },
+  { key: 'lighting',       label: 'Lighting',        header: '## Lighting' },
+  { key: 'mood',           label: 'Mood',            header: '## Mood' },
+  { key: 'pacing',         label: 'Pacing',          header: '## Pacing' },
+  { key: 'negativePrompt', label: 'Negative Prompt', header: '## Negative Prompt' },
+];
+
+/**
+ * Build a markdown-headed assembled paragraph from section values.
+ *
+ * @param {Record<string, string>} result  — object of field values keyed by section key
+ * @param {Array<{key: string, header: string}>} sections  — ordered section map (IMAGE_SECTIONS or VIDEO_SECTIONS)
+ * @returns {string}
+ */
+export function assembleSections(result, sections) {
+  if (!result) return '';
+  return sections
+    .filter(({ key }) => typeof result[key] === 'string' && result[key].trim())
+    .map(({ key, header }) => `${header}\n\n${result[key].trim()}`)
+    .join('\n\n');
+}
+
+/**
+ * Append a tool-agnostic --ar aspect-ratio suffix to an assembled image/video prompt.
+ * Works as readable text for Gemini/Grok and as a parameter hint for SDXL/Midjourney-style tooling.
+ *
+ * @param {string | null | undefined} assembled  — the assembled prompt text
+ * @param {string | null | undefined} aspectRatio — e.g. '16:9', '1:1'
+ * @returns {string}
+ */
+export function appendAspectRatio(assembled, aspectRatio) {
+  if (!assembled) return '';
+  if (!aspectRatio) return assembled;
+  if (assembled.includes(`--ar ${aspectRatio}`)) return assembled;
+  return `${assembled}\n--ar ${aspectRatio}`;
+}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from '../src/App.jsx';
 
 // ── Mock the entire service layer ─────────────────────────────────────────────
@@ -8,29 +9,37 @@ import App from '../src/App.jsx';
 // promptService, so mocking that module is sufficient.
 
 vi.mock('../src/lib/promptService.js', () => ({
-  getApiKey:          vi.fn(),
-  saveApiKey:         vi.fn(),
-  generatePrompt:     vi.fn(),
-  copyToClipboard:    vi.fn(),
-  closeWindow:        vi.fn(),
-  minimizeWindow:     vi.fn(),
-  resizeWindow:       vi.fn(),
-  getSlotConfig:      vi.fn(),
-  saveSlotConfig:     vi.fn(),
-  getOllamaUrl:       vi.fn(),
-  saveOllamaUrl:      vi.fn(),
-  getOllamaApiKey:    vi.fn(),
-  saveOllamaApiKey:   vi.fn(),
-  fetchOllamaModels:  vi.fn(),
+  getApiKey:           vi.fn(),
+  saveApiKey:          vi.fn(),
+  getOpenaiApiKey:     vi.fn(),
+  saveOpenaiApiKey:    vi.fn(),
+  fetchOpenaiModels:   vi.fn(),
+  checkClaudeCliStatus: vi.fn(),
+  generatePrompt:      vi.fn(),
+  copyToClipboard:     vi.fn(),
+  closeWindow:         vi.fn(),
+  minimizeWindow:      vi.fn(),
+  resizeWindow:        vi.fn(),
+  getSlotConfig:       vi.fn(),
+  saveSlotConfig:      vi.fn(),
+  getOllamaUrl:        vi.fn(),
+  saveOllamaUrl:       vi.fn(),
+  getOllamaApiKey:     vi.fn(),
+  saveOllamaApiKey:    vi.fn(),
+  fetchOllamaModels:   vi.fn(),
   fetchAnthropicModels: vi.fn(),
-  getSendTargets:     vi.fn(),
-  saveSendTargets:    vi.fn(),
-  openExternalUrl:    vi.fn(),
-  getHistory:         vi.fn(),
-  saveHistoryEntry:   vi.fn(),
-  clearHistory:       vi.fn(),
-  getTheme:           vi.fn(),
-  saveTheme:          vi.fn(),
+  getSendTargets:      vi.fn(),
+  saveSendTargets:     vi.fn(),
+  openExternalUrl:     vi.fn(),
+  getHistory:          vi.fn(),
+  saveHistoryEntry:    vi.fn(),
+  clearHistory:        vi.fn(),
+  getTheme:            vi.fn(),
+  saveTheme:           vi.fn(),
+  getLastMode:         vi.fn(),
+  saveLastMode:        vi.fn(),
+  getLastAspectRatio:  vi.fn(),
+  saveLastAspectRatio: vi.fn(),
 }));
 
 import * as promptService from '../src/lib/promptService.js';
@@ -41,10 +50,13 @@ const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 /** Set sensible defaults for every getter so tests don't need to repeat them. */
 function setupDefaultMocks() {
   promptService.getApiKey.mockResolvedValue('');
+  promptService.getOpenaiApiKey.mockResolvedValue('');
+  promptService.fetchOpenaiModels.mockResolvedValue({ success: true, models: ['gpt-4o-mini'] });
+  promptService.checkClaudeCliStatus.mockResolvedValue({ installed: false });
   promptService.getSlotConfig.mockResolvedValue({
-    classify: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-    generateSimple: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-    generateComplex: { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
+    classify:        { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
+    generateSimple:  { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
+    generateComplex: { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
     ollamaUrl: 'http://localhost:11434',
   });
   promptService.getOllamaUrl.mockResolvedValue('http://localhost:11434');
@@ -59,6 +71,10 @@ function setupDefaultMocks() {
   promptService.getHistory.mockResolvedValue([]);
   promptService.getTheme.mockResolvedValue('dark');
   promptService.saveTheme.mockResolvedValue(true);
+  promptService.getLastMode.mockResolvedValue('text');
+  promptService.saveLastMode.mockResolvedValue(true);
+  promptService.getLastAspectRatio.mockResolvedValue('1:1');
+  promptService.saveLastAspectRatio.mockResolvedValue(true);
 }
 
 beforeEach(() => {
@@ -201,6 +217,7 @@ describe('App — Main view', () => {
       expect(promptService.generatePrompt).toHaveBeenCalledWith(
         'Write a blog post about AI',
         undefined,
+        undefined,
       );
     });
   });
@@ -325,5 +342,86 @@ describe('App — theme toggle', () => {
 
     expect(document.documentElement.classList.contains('light')).toBe(false);
     expect(promptService.saveTheme).toHaveBeenCalledWith('dark');
+  });
+});
+
+// ── ModeToggle ────────────────────────────────────────────────────────────────
+
+import { ModeToggle, ResultsPanel } from '../src/App.jsx';
+
+describe('ModeToggle', () => {
+  it('renders three options and highlights the current mode', () => {
+    const { getByRole } = render(
+      <ModeToggle mode="image" onChange={() => {}} />
+    );
+    const text  = getByRole('button', { name: /text/i });
+    const image = getByRole('button', { name: /image/i });
+    const video = getByRole('button', { name: /video/i });
+
+    expect(text).toBeInTheDocument();
+    expect(image).toHaveAttribute('aria-pressed', 'true');
+    expect(video).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('calls onChange with the picked mode', async () => {
+    const onChange = vi.fn();
+    const { getByRole } = render(
+      <ModeToggle mode="text" onChange={onChange} />
+    );
+    await userEvent.click(getByRole('button', { name: /image/i }));
+    expect(onChange).toHaveBeenCalledWith('image');
+  });
+});
+
+// ── Image-mode ResultsPanel ───────────────────────────────────────────────────
+
+describe('Image-mode ResultsPanel', () => {
+  it('renders image breakdown labels for image-mode results', () => {
+    const result = {
+      subject: 'A red fox',
+      style: 'Watercolor',
+      assembled: 'A watercolor painting of a red fox in a snowy meadow',
+    };
+
+    const { getByText, queryByText } = render(
+      <ResultsPanel
+        result={result}
+        tier="image"
+        activeTab="breakdown"
+        onTabChange={() => {}}
+        onTierChange={() => {}}
+        sendTargets={[]}
+        toast=""
+        setToast={() => {}}
+        mode="image"
+        aspectRatio="16:9"
+        onAspectRatioChange={() => {}}
+      />
+    );
+
+    expect(getByText('Subject')).toBeInTheDocument();
+    expect(getByText('Style')).toBeInTheDocument();
+    // Tier badge should be hidden in media modes
+    expect(queryByText(/^Image$/)).toBeNull();
+  });
+
+  it('appends aspect ratio in assembled view', () => {
+    const result = { assembled: 'A red fox in a meadow' };
+    const { container } = render(
+      <ResultsPanel
+        result={result}
+        tier="image"
+        activeTab="assembled"
+        onTabChange={() => {}}
+        onTierChange={() => {}}
+        sendTargets={[]}
+        toast=""
+        setToast={() => {}}
+        mode="image"
+        aspectRatio="16:9"
+        onAspectRatioChange={() => {}}
+      />
+    );
+    expect(container.textContent).toContain('--ar 16:9');
   });
 });

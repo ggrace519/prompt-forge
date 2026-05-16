@@ -75,10 +75,51 @@ Return an object with exactly these 7 string fields (all values must be strings,
   "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt"
 }`;
 
+const SYSTEM_PROMPT_IMAGE = `You are a world-class image-prompt engineer. Given a brief task description, you produce a vivid, descriptive prompt for modern multimodal image generators (SDXL, Qwen-Image, Nano Banana, ComfyUI, Gemini, Grok).
+
+Use natural-language descriptive paragraphs, not comma-separated tag soup. Be concrete and sensory: name colors, materials, light direction, lens choice. Expand the user's brief — do not just rephrase it.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 8 string fields (all values must be strings, not nested objects or arrays). Use empty string "" for any field that does not apply.
+
+{
+  "subject": "Concrete description of what is in the frame, expanded with sensory detail",
+  "style": "Medium and aesthetic — photographic, 3D render, oil painting, anime, etc.",
+  "composition": "Framing, angle, perspective, focal point",
+  "lighting": "Light source, quality, direction, time of day",
+  "mood": "Atmosphere and emotional tone",
+  "technical": "Camera/lens for photo, render engine for 3D, model-specific quality hints",
+  "negativePrompt": "Things to avoid (mainly for SDXL/ComfyUI). Use empty string if not meaningfully helpful.",
+  "assembled": "A single paste-ready descriptive paragraph combining all of the above into prose suitable for any of the listed tools. No headers, no bullet points."
+}`;
+
+const SYSTEM_PROMPT_VIDEO = `You are a world-class video-prompt engineer. Given a brief task description, you produce a vivid, descriptive prompt for short-form AI video generators (Sora, Runway, Kling, Veo via Gemini, Grok video, ComfyUI workflows).
+
+Use natural-language descriptive paragraphs, not comma-separated tag soup. Describe motion concretely — what moves, how it moves, where the camera goes. Expand the user's brief — do not just rephrase it.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 9 string fields (all values must be strings, not nested objects or arrays). Use empty string "" for any field that does not apply.
+
+{
+  "subject": "Scene and characters — what we see in the frame",
+  "action": "What happens; the motion itself",
+  "cameraMotion": "Pan, dolly, tracking, static, handheld — describe camera movement",
+  "style": "Cinematic, animated, documentary, music-video, etc.",
+  "lighting": "Light setup, time of day, mood-shaping illumination",
+  "mood": "Tone and atmosphere",
+  "pacing": "Fast cuts, slow burn, single continuous shot — rhythm of the clip",
+  "negativePrompt": "Things to avoid. Use empty string if not meaningfully helpful.",
+  "assembled": "A single paste-ready descriptive paragraph combining all of the above into prose suitable for any of the listed tools. No headers, no bullet points."
+}`;
+
 const TEMPLATE_MAP = {
   simple:   SYSTEM_PROMPT_SIMPLE,
   standard: SYSTEM_PROMPT_STANDARD,
   complex:  SYSTEM_PROMPT_COMPLEX,
+  image:    SYSTEM_PROMPT_IMAGE,
+  video:    SYSTEM_PROMPT_VIDEO,
 };
 
 // ── JSON extraction ───────────────────────────────────────────────────────────
@@ -97,9 +138,41 @@ function extractJSON(text) {
   return text.trim();
 }
 
+// ── Image / video section maps (CJS mirror of src/lib/utils.js) ───────────────
+
+const IMAGE_SECTIONS_CJS = [
+  { key: 'subject',        header: '## Subject' },
+  { key: 'style',          header: '## Style' },
+  { key: 'composition',    header: '## Composition' },
+  { key: 'lighting',       header: '## Lighting' },
+  { key: 'mood',           header: '## Mood' },
+  { key: 'technical',      header: '## Technical' },
+  { key: 'negativePrompt', header: '## Negative Prompt' },
+];
+
+const VIDEO_SECTIONS_CJS = [
+  { key: 'subject',        header: '## Subject' },
+  { key: 'action',         header: '## Action' },
+  { key: 'cameraMotion',   header: '## Camera Motion' },
+  { key: 'style',          header: '## Style' },
+  { key: 'lighting',       header: '## Lighting' },
+  { key: 'mood',           header: '## Mood' },
+  { key: 'pacing',         header: '## Pacing' },
+  { key: 'negativePrompt', header: '## Negative Prompt' },
+];
+
+function assembleSectionsCJS(result, sections) {
+  if (!result) return '';
+  return sections
+    .filter(({ key }) => typeof result[key] === 'string' && result[key].trim())
+    .map(({ key, header }) => `${header}\n\n${result[key].trim()}`)
+    .join('\n\n');
+}
+
 // ── Config Migration ─────────────────────────────────────────────────────────
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+const DEFAULT_OPENAI_MODEL    = 'gpt-4o-mini';
 
 const DEFAULT_SEND_TARGETS = [
   { name: 'Claude',  url: 'https://claude.ai/new' },
@@ -108,30 +181,40 @@ const DEFAULT_SEND_TARGETS = [
 ];
 
 function migrateConfig() {
-  if (store.get('configMigrated')) return;
+  if (!store.get('configMigrated')) {
+    const oldProvider = store.get('provider', 'anthropic');
+    const oldModel    = store.get('model', DEFAULT_ANTHROPIC_MODEL);
 
-  const oldProvider = store.get('provider', 'anthropic');
-  const oldModel    = store.get('model', DEFAULT_ANTHROPIC_MODEL);
-
-  for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
-    if (!store.get(`${slot}.provider`)) {
-      store.set(`${slot}.provider`, oldProvider);
-      store.set(`${slot}.model`, slot === 'classify' ? DEFAULT_ANTHROPIC_MODEL : oldModel);
+    for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+      if (!store.get(`${slot}.provider`)) {
+        store.set(`${slot}.provider`, oldProvider);
+        store.set(`${slot}.model`, slot === 'classify' ? DEFAULT_ANTHROPIC_MODEL : oldModel);
+      }
     }
+
+    if (!store.get('sendTargets')) {
+      store.set('sendTargets', DEFAULT_SEND_TARGETS);
+    }
+
+    if (!store.get('history')) {
+      store.set('history', []);
+    }
+
+    store.delete('provider');
+    store.delete('model');
+
+    store.set('configMigrated', true);
   }
 
-  if (!store.get('sendTargets')) {
-    store.set('sendTargets', DEFAULT_SEND_TARGETS);
+  // v2 — backfill `authMethod: 'apiKey'` onto every slot that predates the field.
+  if (!store.get('configMigratedV2')) {
+    for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+      if (!store.get(`${slot}.authMethod`)) {
+        store.set(`${slot}.authMethod`, 'apiKey');
+      }
+    }
+    store.set('configMigratedV2', true);
   }
-
-  if (!store.get('history')) {
-    store.set('history', []);
-  }
-
-  store.delete('provider');
-  store.delete('model');
-
-  store.set('configMigrated', true);
 }
 
 // ── Window ────────────────────────────────────────────────────────────────────
@@ -246,7 +329,9 @@ app.whenReady().then(() => {
 
   // ── Provider call helper ──────────────────────────────────────────────────
 
-  async function callProvider(provider, model, apiKey, ollamaUrl, ollamaApiKey, systemPrompt, userMessage, maxTokens = 16384) {
+  async function callProvider(creds, systemPrompt, userMessage, maxTokens = 16384) {
+    const { provider, authMethod, model, apiKey, openaiApiKey, ollamaUrl, ollamaApiKey } = creds;
+
     if (provider === 'ollama') {
       const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
       const headers = { 'Content-Type': 'application/json' };
@@ -274,7 +359,69 @@ app.whenReady().then(() => {
       return content;
     }
 
-    // Anthropic path — use fetch directly (same pattern as Ollama)
+    if (provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: model || DEFAULT_OPENAI_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`OpenAI ${res.status}: ${body}`);
+      }
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('OpenAI returned no content');
+      return content;
+    }
+
+    // Anthropic — subscription path uses claude-agent-sdk (reads Claude Code creds).
+    if (provider === 'anthropic' && authMethod === 'subscription') {
+      // Lazy ESM import — main.js is CJS and the agent SDK is ESM-only.
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
+      const iter = query({
+        prompt: userMessage,
+        options: {
+          model: model || DEFAULT_ANTHROPIC_MODEL,
+          systemPrompt,
+          settingSources: [],
+          permissionMode: 'bypassPermissions',
+          allowedTools: [],
+          maxTurns: 1,
+        },
+      });
+
+      let collected = '';
+      let resultText = '';
+      for await (const message of iter) {
+        if (message.type === 'assistant') {
+          for (const block of message.message?.content || []) {
+            if (block.type === 'text' && block.text) collected += block.text;
+          }
+        } else if (message.type === 'result') {
+          if (message.subtype === 'success' && typeof message.result === 'string') {
+            resultText = message.result;
+          } else if (message.subtype !== 'success') {
+            throw new Error(`Claude subscription error: ${message.subtype}`);
+          }
+        }
+      }
+      const text = resultText || collected;
+      if (!text) throw new Error('Claude subscription returned no text');
+      return text;
+    }
+
+    // Anthropic — API-key path (default).
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -300,47 +447,61 @@ app.whenReady().then(() => {
     return textBlock.text;
   }
 
+  /** Read+decrypt a key stored as either DPAPI ciphertext (base64) or plaintext. */
+  function readEncryptedKey(valueKey, flagKey) {
+    const stored      = store.get(valueKey, '');
+    const isEncrypted = store.get(flagKey, false);
+    if (!stored) return '';
+    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+      try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+    }
+    return stored;
+  }
+
+  /** Persist a key, encrypting via DPAPI when available. */
+  function writeEncryptedKey(valueKey, flagKey, key) {
+    if (!key) {
+      store.delete(valueKey);
+      store.delete(flagKey);
+      return;
+    }
+    if (safeStorage.isEncryptionAvailable()) {
+      store.set(valueKey, safeStorage.encryptString(key).toString('base64'));
+      store.set(flagKey, true);
+    } else {
+      store.set(valueKey, key);
+      store.set(flagKey, false);
+    }
+  }
+
   /** Resolve credentials for a given slot. */
   function getSlotCredentials(slot) {
-    const provider = store.get(`${slot}.provider`, 'anthropic');
-    const model    = store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL);
-    const apiKey   = (() => {
-      const stored      = store.get('apiKey', '');
-      const isEncrypted = store.get('apiKeyEncrypted', false);
-      if (!stored) return '';
-      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-      }
-      return stored;
-    })();
-    const ollamaUrl = store.get('ollamaUrl', 'http://localhost:11434');
-    const ollamaApiKey = (() => {
-      const stored      = store.get('ollamaApiKey', '');
-      const isEncrypted = store.get('ollamaApiKeyEncrypted', false);
-      if (!stored) return '';
-      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-        try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-      }
-      return stored;
-    })();
-    return { provider, model, apiKey, ollamaUrl, ollamaApiKey };
+    return {
+      provider:     store.get(`${slot}.provider`, 'anthropic'),
+      authMethod:   store.get(`${slot}.authMethod`, 'apiKey'),
+      model:        store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL),
+      apiKey:       readEncryptedKey('apiKey', 'apiKeyEncrypted'),
+      openaiApiKey: readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted'),
+      ollamaUrl:    store.get('ollamaUrl', 'http://localhost:11434'),
+      ollamaApiKey: readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted'),
+    };
   }
 
   // ── IPC Handlers ───────────────────────────────────────────────────────────
 
   // Generate a structured prompt — classify-then-generate two-call flow
-  ipcMain.handle('generate-prompt', async (_event, { task, tier: explicitTier }) => {
+  ipcMain.handle('generate-prompt', async (_event, { task, tier: explicitTier, mode }) => {
     try {
-      let tier = explicitTier;
+      const isMedia = mode === 'image' || mode === 'video';
+      let tier = isMedia ? mode : explicitTier;
       let classifyCreds = null;
 
-      // Step 1: Classify (unless tier was provided by the user)
+      // Step 1: Classify (text mode only; media modes skip classify entirely)
       if (!tier) {
         classifyCreds = getSlotCredentials('classify');
         try {
           const classifyText = await callProvider(
-            classifyCreds.provider, classifyCreds.model,
-            classifyCreds.apiKey, classifyCreds.ollamaUrl, classifyCreds.ollamaApiKey,
+            classifyCreds,
             CLASSIFY_PROMPT,
             `Classify this task: ${task}`,
             50,
@@ -363,8 +524,7 @@ app.whenReady().then(() => {
       const systemPrompt = TEMPLATE_MAP[tier];
 
       const textContent = await callProvider(
-        genCreds.provider, genCreds.model,
-        genCreds.apiKey, genCreds.ollamaUrl, genCreds.ollamaApiKey,
+        genCreds,
         systemPrompt,
         `Generate a perfect AI prompt for this task: ${task}`,
       );
@@ -447,20 +607,30 @@ app.whenReady().then(() => {
 
       const parsed = parseModelJSON(textContent);
 
-      // Build the assembled prompt from individual fields
-      const sectionMap = [
-        ['role',          '## Role'],
-        ['instructions',  '## Instructions'],
-        ['context',       '## Context'],
-        ['outputFormat',  '## Output Format'],
-        ['reasoning',     '## Reasoning Steps'],
-        ['examples',      '## Examples'],
-        ['reinforcement', '## Remember'],
-      ];
-      parsed.assembled = sectionMap
-        .filter(([key]) => parsed[key]?.trim())
-        .map(([key, header]) => `${header}\n\n${parsed[key].trim()}`)
-        .join('\n\n');
+      // Build the assembled prompt from individual fields if the model didn't
+      // already produce one. Image/video templates ask the model to populate
+      // `assembled` itself; text templates do not.
+      if (!parsed.assembled || !String(parsed.assembled).trim()) {
+        if (tier === 'image') {
+          parsed.assembled = assembleSectionsCJS(parsed, IMAGE_SECTIONS_CJS);
+        } else if (tier === 'video') {
+          parsed.assembled = assembleSectionsCJS(parsed, VIDEO_SECTIONS_CJS);
+        } else {
+          const textSectionMap = [
+            ['role',          '## Role'],
+            ['instructions',  '## Instructions'],
+            ['context',       '## Context'],
+            ['outputFormat',  '## Output Format'],
+            ['reasoning',     '## Reasoning Steps'],
+            ['examples',      '## Examples'],
+            ['reinforcement', '## Remember'],
+          ];
+          parsed.assembled = textSectionMap
+            .filter(([key]) => parsed[key]?.trim())
+            .map(([key, header]) => `${header}\n\n${parsed[key].trim()}`)
+            .join('\n\n');
+        }
+      }
 
       return {
         success: true,
@@ -497,15 +667,7 @@ app.whenReady().then(() => {
   // Fetch available models from Anthropic API
   ipcMain.handle('fetch-anthropic-models', async () => {
     try {
-      // Decrypt the stored API key
-      const stored      = store.get('apiKey', '');
-      const isEncrypted = store.get('apiKeyEncrypted', false);
-      let apiKey = '';
-      if (stored && isEncrypted && safeStorage.isEncryptionAvailable()) {
-        try { apiKey = safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { /* */ }
-      } else {
-        apiKey = stored;
-      }
+      const apiKey = readEncryptedKey('apiKey', 'apiKeyEncrypted');
       if (!apiKey) return { success: true, models: [] };
 
       const res = await fetch('https://api.anthropic.com/v1/models', {
@@ -526,38 +688,61 @@ app.whenReady().then(() => {
     }
   });
 
-  // Persist API key — encrypted via OS-native DPAPI (Windows) / Keychain (macOS)
+  // Fetch available models from OpenAI API
+  ipcMain.handle('fetch-openai-models', async () => {
+    try {
+      const apiKey = readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted');
+      if (!apiKey) return { success: true, models: [] };
+
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const models = (data.data || [])
+        .map((m) => m.id)
+        .filter((id) => id && /^(gpt-|o\d|chatgpt-)/i.test(id))
+        .sort();
+      return { success: true, models };
+    } catch (err) {
+      return { success: false, error: err.message || String(err) };
+    }
+  });
+
+  // Persist API key — encrypted via OS-native DPAPI (Windows) / Keychain (macOS).
   // The stored value in config.json is an opaque base64 blob, never the raw key.
   ipcMain.handle('save-api-key', (_event, key) => {
-    if (safeStorage.isEncryptionAvailable()) {
-      const encrypted = safeStorage.encryptString(key);
-      store.set('apiKey', encrypted.toString('base64'));
-      store.set('apiKeyEncrypted', true);
-    } else {
-      // Encryption unavailable (rare — e.g. headless Linux with no keyring).
-      // Store plaintext and flag it so get-api-key doesn't try to decrypt.
-      store.set('apiKey', key);
-      store.set('apiKeyEncrypted', false);
-    }
+    writeEncryptedKey('apiKey', 'apiKeyEncrypted', key);
     return true;
   });
 
-  // Retrieve and decrypt the API key
   ipcMain.handle('get-api-key', () => {
-    const stored      = store.get('apiKey', '');
-    const isEncrypted = store.get('apiKeyEncrypted', false);
-    if (!stored) return '';
-    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-      try {
-        return safeStorage.decryptString(Buffer.from(stored, 'base64'));
-      } catch {
-        // Blob is unreadable (e.g. different OS user or corrupted); force re-entry.
-        store.delete('apiKey');
-        store.delete('apiKeyEncrypted');
-        return '';
-      }
-    }
-    return stored; // plaintext fallback path
+    return readEncryptedKey('apiKey', 'apiKeyEncrypted');
+  });
+
+  ipcMain.handle('save-openai-api-key', (_event, key) => {
+    writeEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted', key);
+    return true;
+  });
+
+  ipcMain.handle('get-openai-api-key', () => {
+    return readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted');
+  });
+
+  // Detect Claude Code CLI for the subscription auth path.
+  ipcMain.handle('check-claude-cli-status', async () => {
+    const { exec } = require('child_process');
+    return new Promise((resolve) => {
+      const cmd = process.platform === 'win32' ? 'claude --version' : 'claude --version';
+      exec(cmd, { timeout: 3000, windowsHide: true }, (err, stdout) => {
+        if (err) {
+          resolve({ installed: false });
+          return;
+        }
+        const version = String(stdout || '').trim().split('\n')[0] || '';
+        resolve({ installed: true, version });
+      });
+    });
   });
 
   // Write text to the system clipboard
@@ -571,47 +756,28 @@ app.whenReady().then(() => {
   ipcMain.handle('get-ollama-url',  () => store.get('ollamaUrl', 'http://localhost:11434'));
 
   ipcMain.handle('save-ollama-api-key', (_event, key) => {
-    if (!key) {
-      store.delete('ollamaApiKey');
-      store.delete('ollamaApiKeyEncrypted');
-      return true;
-    }
-    if (safeStorage.isEncryptionAvailable()) {
-      store.set('ollamaApiKey', safeStorage.encryptString(key).toString('base64'));
-      store.set('ollamaApiKeyEncrypted', true);
-    } else {
-      store.set('ollamaApiKey', key);
-      store.set('ollamaApiKeyEncrypted', false);
-    }
+    writeEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted', key);
     return true;
   });
   ipcMain.handle('get-ollama-api-key', () => {
-    const stored      = store.get('ollamaApiKey', '');
-    const isEncrypted = store.get('ollamaApiKeyEncrypted', false);
-    if (!stored) return '';
-    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-      try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-    }
-    return stored;
+    return readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted');
   });
 
   // ── Slot config ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('get-slot-config', () => {
+    function readSlot(slot) {
+      return {
+        provider:   store.get(`${slot}.provider`, 'anthropic'),
+        authMethod: store.get(`${slot}.authMethod`, 'apiKey'),
+        model:      store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL),
+      };
+    }
     return {
-      classify: {
-        provider: store.get('classify.provider', 'anthropic'),
-        model:    store.get('classify.model', DEFAULT_ANTHROPIC_MODEL),
-      },
-      generateSimple: {
-        provider: store.get('generateSimple.provider', 'anthropic'),
-        model:    store.get('generateSimple.model', DEFAULT_ANTHROPIC_MODEL),
-      },
-      generateComplex: {
-        provider: store.get('generateComplex.provider', 'anthropic'),
-        model:    store.get('generateComplex.model', DEFAULT_ANTHROPIC_MODEL),
-      },
-      ollamaUrl: store.get('ollamaUrl', 'http://localhost:11434'),
+      classify:        readSlot('classify'),
+      generateSimple:  readSlot('generateSimple'),
+      generateComplex: readSlot('generateComplex'),
+      ollamaUrl:       store.get('ollamaUrl', 'http://localhost:11434'),
     };
   });
 
@@ -619,6 +785,7 @@ app.whenReady().then(() => {
     for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
       if (config[slot]) {
         store.set(`${slot}.provider`, config[slot].provider);
+        store.set(`${slot}.authMethod`, config[slot].authMethod || 'apiKey');
         store.set(`${slot}.model`, config[slot].model);
       }
     }
@@ -669,11 +836,33 @@ app.whenReady().then(() => {
   ipcMain.handle('close-window',    () => win.hide());
   ipcMain.handle('minimize-window', () => win.hide());
 
-  // Renderer requests a height change (e.g. after results load)
-  ipcMain.handle('resize-window', (_event, height) => {
-    win.setSize(480, height, false);
+  // Renderer requests a window resize. Accepts either a number (height only,
+  // backwards compatible — width stays at 480) or an object {width, height}.
+  ipcMain.handle('resize-window', (_event, arg) => {
+    const width  = (typeof arg === 'object' && arg && typeof arg.width  === 'number') ? arg.width  : 480;
+    const height = (typeof arg === 'object' && arg && typeof arg.height === 'number') ? arg.height : arg;
+    win.setSize(width, height, false);
     const { x, y } = getWindowPosition();
     win.setPosition(x, y, false);
+  });
+
+  // ── Mode + aspect-ratio persistence ────────────────────────────────────────
+  ipcMain.handle('get-last-mode', () => store.get('lastMode', 'text'));
+  ipcMain.handle('save-last-mode', (_event, mode) => {
+    if (['text', 'image', 'video'].includes(mode)) store.set('lastMode', mode);
+    return true;
+  });
+
+  ipcMain.handle('get-last-aspect-ratio', (_event, mode) => {
+    if (mode === 'image') return store.get('lastAspectRatio.image', '1:1');
+    if (mode === 'video') return store.get('lastAspectRatio.video', '16:9');
+    return '';
+  });
+  ipcMain.handle('save-last-aspect-ratio', (_event, { mode, ratio }) => {
+    if (mode === 'image' || mode === 'video') {
+      store.set(`lastAspectRatio.${mode}`, ratio);
+    }
+    return true;
   });
 
   // ── Theme ──────────────────────────────────────────────────────────────────
