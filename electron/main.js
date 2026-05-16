@@ -75,10 +75,51 @@ Return an object with exactly these 7 string fields (all values must be strings,
   "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt"
 }`;
 
+const SYSTEM_PROMPT_IMAGE = `You are a world-class image-prompt engineer. Given a brief task description, you produce a vivid, descriptive prompt for modern multimodal image generators (SDXL, Qwen-Image, Nano Banana, ComfyUI, Gemini, Grok).
+
+Use natural-language descriptive paragraphs, not comma-separated tag soup. Be concrete and sensory: name colors, materials, light direction, lens choice. Expand the user's brief — do not just rephrase it.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 8 string fields (all values must be strings, not nested objects or arrays). Use empty string "" for any field that does not apply.
+
+{
+  "subject": "Concrete description of what is in the frame, expanded with sensory detail",
+  "style": "Medium and aesthetic — photographic, 3D render, oil painting, anime, etc.",
+  "composition": "Framing, angle, perspective, focal point",
+  "lighting": "Light source, quality, direction, time of day",
+  "mood": "Atmosphere and emotional tone",
+  "technical": "Camera/lens for photo, render engine for 3D, model-specific quality hints",
+  "negativePrompt": "Things to avoid (mainly for SDXL/ComfyUI). Use empty string if not meaningfully helpful.",
+  "assembled": "A single paste-ready descriptive paragraph combining all of the above into prose suitable for any of the listed tools. No headers, no bullet points."
+}`;
+
+const SYSTEM_PROMPT_VIDEO = `You are a world-class video-prompt engineer. Given a brief task description, you produce a vivid, descriptive prompt for short-form AI video generators (Sora, Runway, Kling, Veo via Gemini, Grok video, ComfyUI workflows).
+
+Use natural-language descriptive paragraphs, not comma-separated tag soup. Describe motion concretely — what moves, how it moves, where the camera goes. Expand the user's brief — do not just rephrase it.
+
+CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
+
+Return an object with exactly these 9 string fields (all values must be strings, not nested objects or arrays). Use empty string "" for any field that does not apply.
+
+{
+  "subject": "Scene and characters — what we see in the frame",
+  "action": "What happens; the motion itself",
+  "cameraMotion": "Pan, dolly, tracking, static, handheld — describe camera movement",
+  "style": "Cinematic, animated, documentary, music-video, etc.",
+  "lighting": "Light setup, time of day, mood-shaping illumination",
+  "mood": "Tone and atmosphere",
+  "pacing": "Fast cuts, slow burn, single continuous shot — rhythm of the clip",
+  "negativePrompt": "Things to avoid. Use empty string if not meaningfully helpful.",
+  "assembled": "A single paste-ready descriptive paragraph combining all of the above into prose suitable for any of the listed tools. No headers, no bullet points."
+}`;
+
 const TEMPLATE_MAP = {
   simple:   SYSTEM_PROMPT_SIMPLE,
   standard: SYSTEM_PROMPT_STANDARD,
   complex:  SYSTEM_PROMPT_COMPLEX,
+  image:    SYSTEM_PROMPT_IMAGE,
+  video:    SYSTEM_PROMPT_VIDEO,
 };
 
 // ── JSON extraction ───────────────────────────────────────────────────────────
