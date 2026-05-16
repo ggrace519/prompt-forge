@@ -93,6 +93,21 @@ html.light .tier-dot.tier-simple   { background: #16a34a; }
 html.light .tier-dot.tier-standard { background: #d97706; }
 html.light .tier-dot.tier-complex  { background: #b45309; }
 
+html.light .tier-image {
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.1);
+  border-color: rgba(8, 145, 178, 0.25);
+}
+
+html.light .tier-video {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
+html.light .tier-dot.tier-image { background: #0891b2; }
+html.light .tier-dot.tier-video { background: #7c3aed; }
+
 html.light .toast {
   background: #ffffff;
   color: #1a1a1a;

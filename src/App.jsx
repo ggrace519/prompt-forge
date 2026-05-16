@@ -987,6 +987,11 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
     setTier(entry.tier);
     setActiveTab('assembled');
     setShowHistory(false);
+    if (entry.tier === 'image' || entry.tier === 'video') {
+      setMode(entry.tier);
+    } else if (['simple', 'standard', 'complex'].includes(entry.tier)) {
+      setMode('text');
+    }
   }
 
   async function handleClearHistory() {
