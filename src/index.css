@@ -1472,3 +1472,21 @@ button, label, span, h1, p {
   font-size: 12px;
   padding: 4px 8px;
 }
+
+/* Two-column layout for image/video modes */
+.main-body.media-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+/* In media mode, error banner spans both columns */
+.main-body.media-mode .error-banner {
+  grid-column: 1 / -1;
+}
+
+/* In media mode, mode-toggle spans both columns */
+.main-body.media-mode > .mode-toggle {
+  grid-column: 1 / -1;
+}

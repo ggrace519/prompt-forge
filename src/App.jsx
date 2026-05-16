@@ -1073,7 +1073,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
           onClose={() => setShowHistory(false)}
         />
       ) : (
-        <div className="main-body">
+        <div className={`main-body${mode === 'image' || mode === 'video' ? ' media-mode' : ''}`}>
           <ModeToggle mode={mode} onChange={handleModeChange} />
           <div className="input-group">
             <textarea
