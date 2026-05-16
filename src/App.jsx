@@ -835,6 +835,8 @@ function SettingsView({
 
 function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
   const [task,         setTask]         = useState('');
+  const [mode,         setMode]         = useState('text');
+  const [aspectRatio,  setAspectRatio]  = useState('1:1');
   const [loading,      setLoading]      = useState(false);
   const [loadingStep,  setLoadingStep]  = useState('');
   const [result,       setResult]       = useState(null);
@@ -848,6 +850,21 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [openaiModels, setOpenaiModels] = useState(FALLBACK_OPENAI_MODELS);
   const [ollamaModels, setOllamaModels] = useState([]);
+
+  // Load persisted mode + aspect ratio on mount
+  useEffect(() => {
+    promptService.getLastMode().then((m) => {
+      if (['text', 'image', 'video'].includes(m)) setMode(m);
+    }).catch(() => {});
+  }, []);
+
+  // When mode changes, load the saved aspect ratio for that mode
+  useEffect(() => {
+    if (mode === 'text') return;
+    promptService.getLastAspectRatio(mode).then((r) => {
+      if (r) setAspectRatio(r);
+    }).catch(() => {});
+  }, [mode]);
 
   // Fetch all three model lists for the override row
   useEffect(() => {
@@ -872,9 +889,30 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
     return slot.model || '';
   })();
 
+  // Window dimensions per mode + state
   useEffect(() => {
-    promptService.resizeWindow(result ? 640 : 320);
-  }, [result]);
+    if (mode === 'image' || mode === 'video') {
+      promptService.resizeWindow({ width: 640, height: 720 });
+    } else {
+      promptService.resizeWindow({ width: 480, height: result ? 640 : 320 });
+    }
+  }, [mode, result]);
+
+  function handleModeChange(next) {
+    if (next === mode) return;
+    setMode(next);
+    setResult(null);
+    setTier(null);
+    setError('');
+    promptService.saveLastMode(next).catch(() => {});
+  }
+
+  function handleAspectRatioChange(next) {
+    setAspectRatio(next);
+    if (mode === 'image' || mode === 'video') {
+      promptService.saveLastAspectRatio(mode, next).catch(() => {});
+    }
+  }
 
   async function handleGenerate(overrideTier) {
     const trimmed = task.trim();
@@ -886,7 +924,12 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
 
     try {
       setLoadingStep(overrideTier ? 'generating' : 'classifying');
-      const response = await promptService.generatePrompt(trimmed, overrideTier || undefined);
+      const isMedia = mode === 'image' || mode === 'video';
+      const response = await promptService.generatePrompt(
+        trimmed,
+        isMedia ? undefined : (overrideTier || undefined),
+        isMedia ? mode : undefined,
+      );
       setResult(response.data);
       setTier(response.tier);
       setActiveTab('assembled');
@@ -1006,6 +1049,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
         />
       ) : (
         <div className="main-body">
+          <ModeToggle mode={mode} onChange={handleModeChange} />
           <div className="input-group">
             <textarea
               className="task-textarea"

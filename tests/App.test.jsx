@@ -36,6 +36,10 @@ vi.mock('../src/lib/promptService.js', () => ({
   clearHistory:        vi.fn(),
   getTheme:            vi.fn(),
   saveTheme:           vi.fn(),
+  getLastMode:         vi.fn(),
+  saveLastMode:        vi.fn(),
+  getLastAspectRatio:  vi.fn(),
+  saveLastAspectRatio: vi.fn(),
 }));
 
 import * as promptService from '../src/lib/promptService.js';
@@ -67,6 +71,10 @@ function setupDefaultMocks() {
   promptService.getHistory.mockResolvedValue([]);
   promptService.getTheme.mockResolvedValue('dark');
   promptService.saveTheme.mockResolvedValue(true);
+  promptService.getLastMode.mockResolvedValue('text');
+  promptService.saveLastMode.mockResolvedValue(true);
+  promptService.getLastAspectRatio.mockResolvedValue('1:1');
+  promptService.saveLastAspectRatio.mockResolvedValue(true);
 }
 
 beforeEach(() => {
@@ -208,6 +216,7 @@ describe('App — Main view', () => {
     await waitFor(() => {
       expect(promptService.generatePrompt).toHaveBeenCalledWith(
         'Write a blog post about AI',
+        undefined,
         undefined,
       );
     });
