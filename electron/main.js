@@ -441,7 +441,7 @@ app.whenReady().then(() => {
       throw new Error(`Anthropic ${res.status}: ${body}`);
     }
     const data = await res.json();
-    console.log('[callProvider] stop_reason:', data.stop_reason, 'usage:', JSON.stringify(data.usage));
+    if (isDev) console.log('[callProvider] stop_reason:', data.stop_reason, 'usage:', JSON.stringify(data.usage));
     const textBlock = (data.content || []).find((b) => b.type === 'text');
     if (!textBlock?.text) throw new Error('Anthropic returned no text content');
     return textBlock.text;

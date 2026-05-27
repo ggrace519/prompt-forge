@@ -37,6 +37,20 @@ describe('parseModelJSON', () => {
     expect(parsed.outputFormat).toBe('Return fields named "title" and "summary".');
     expect(parsed.role).toBe('editor');
   });
+
+  it('repairs a response truncated mid-string by closing the open string and object', () => {
+    const raw = '{"role":"writer","instructions":"Follow these steps carefully and';
+    const parsed = parseModelJSON(raw);
+    expect(parsed.role).toBe('writer');
+    expect(parsed.instructions).toBe('Follow these steps carefully and');
+  });
+
+  it('repairs a response truncated mid-string with an open nested brace', () => {
+    const raw = '{"role":"writer","instructions":"step one is to {begin';
+    const parsed = parseModelJSON(raw);
+    expect(parsed.role).toBe('writer');
+    expect(parsed.instructions).toBe('step one is to {begin');
+  });
 });
 
 describe('extractJSON — markdown fences', () => {

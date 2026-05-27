@@ -32,7 +32,7 @@ src/index.css         # Full dark-theme stylesheet using CSS custom properties
 
 - **Components never touch `window.electronAPI` directly.** Everything routes through `promptService.js`. This is the portability contract — swap that file to run on React Native or web.
 - **Main process uses CommonJS** (`require`). Renderer uses ESM (`import`).
-- **`extractJSON` is duplicated** in `src/lib/utils.js` (ESM) and `electron/main.js` (inline CJS). Keep both in sync.
+- **Pure JSON/section helpers are duplicated** across `src/lib/utils.js` (ESM) and `electron/main.js` (inline CJS) because of the ESM/CJS split: `extractJSON`, `parseModelJSON` (including its truncated-response repair pass), and the section assembler / section maps. Keep both copies in sync.
 - **API keys are encrypted** at rest via `safeStorage` (DPAPI on Windows). Stored as base64 blobs in electron-store config, never plaintext (unless encryption is unavailable).
 - **Credentials are resolved server-side.** The renderer sends only `{ task, tier }` to `generate-prompt`. The main process reads slot configs and decrypts keys internally.
 

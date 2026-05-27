@@ -35,7 +35,12 @@ export function extractJSON(text) {
 
 /**
  * Parse model-emitted JSON that may contain raw control characters or
- * unescaped quotes inside string values.
+ * unescaped quotes inside string values. If the model stopped mid-output
+ * (truncated response), the open string and any unclosed braces/brackets
+ * are repaired before a second parse attempt.
+ *
+ * Mirrors the inline implementation in electron/main.js (CommonJS process).
+ * Keep the two in sync if you change the logic here.
  *
  * @param {string | null | undefined} text
  * @returns {any}
@@ -104,7 +109,40 @@ export function parseModelJSON(text) {
     chars.push(ch);
   }
 
-  return JSON.parse(chars.join(''));
+  const result = chars.join('');
+  try {
+    return JSON.parse(result);
+  } catch {
+    // Model likely stopped mid-string. Repair by closing any open string
+    // value and unclosed braces/brackets, then parse again.
+    let repaired = result;
+
+    // If we're inside a string (odd number of unescaped quotes), close it.
+    let quoteCount = 0;
+    let esc = false;
+    for (const c of repaired) {
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') quoteCount++;
+    }
+    if (quoteCount % 2 !== 0) repaired += '"';
+
+    // Close any open braces/brackets (ignoring those inside strings).
+    let depth = 0;
+    esc = false;
+    let inStr = false;
+    for (const c of repaired) {
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{' || c === '[') depth++;
+      if (c === '}' || c === ']') depth--;
+    }
+    for (let d = 0; d < depth; d++) repaired += '}';
+
+    return JSON.parse(repaired);
+  }
 }
 
 // Section maps for image and video modes — used to build the assembled paragraph

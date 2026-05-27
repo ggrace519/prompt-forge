@@ -145,8 +145,13 @@ export async function minimizeWindow() {
   return getIPC().minimizeWindow();
 }
 
-export async function resizeWindow(height) {
-  return getIPC().resizeWindow(height);
+/**
+ * Resize the popup window.
+ * @param {number | {width?: number, height?: number}} arg
+ *   A number sets height only (width stays 480); an object sets both.
+ */
+export async function resizeWindow(arg) {
+  return getIPC().resizeWindow(arg);
 }
 
 // ── Mode + aspect-ratio persistence ─────────────────────────────────────────
