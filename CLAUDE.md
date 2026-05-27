@@ -12,10 +12,18 @@ Windows system-tray Electron app that turns plain task descriptions into structu
 npm run dev          # Vite dev server (port 5173) + Electron with hot-reload
 npm run build        # Production Vite build + electron-builder (.exe in release/)
 npm start            # Launch Electron against last production build
+npm run lint         # ESLint (flat config, eslint.config.mjs) over the whole repo
+npm run lint:fix     # ESLint with --fix
 npm test             # Vitest run (one-shot)
 npm run test:watch   # Vitest watch mode
 npm run test:coverage # Vitest with V8 coverage (covers src/lib/**)
 ```
+
+CI (`.forgejo/workflows/test.yml`) runs `npm run lint`, then `npm test`, then `vite build` on every push/PR to `main`.
+
+### Linting
+
+ESLint 9 flat config (`eslint.config.mjs`) with three environment blocks: renderer (`src/**`, ESM + React + browser globals, automatic JSX runtime so no `react-in-jsx-scope`), main/scripts (`electron/**`, `scripts/**`, CommonJS + Node globals — `electron/preload.js` additionally gets browser globals since it touches the DOM), and tests (`tests/**`, ESM + Vitest + jsdom globals). `react/prop-types` is off (no PropTypes in this codebase).
 
 ## Architecture
 

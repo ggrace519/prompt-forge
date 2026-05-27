@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractJSON, parseModelJSON, appendAspectRatio, assembleSections, IMAGE_SECTIONS, VIDEO_SECTIONS } from '../src/lib/utils.js';
+import { extractJSON, parseModelJSON, appendAspectRatio, assembleSections, IMAGE_SECTIONS } from '../src/lib/utils.js';
 
 // ── Happy paths ───────────────────────────────────────────────────────────────
 

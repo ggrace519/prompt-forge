@@ -50,14 +50,6 @@ function defaultSlot(provider = 'anthropic', model = 'claude-haiku-4-5-20251001'
   return { provider, authMethod: 'apiKey', model };
 }
 
-const TIER_COLORS = {
-  simple:   { bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.3)', text: '#4ade80' },
-  standard: { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', text: '#f59e0b' },
-  complex:  { bg: 'rgba(251, 191, 36, 0.12)', border: 'rgba(251, 191, 36, 0.3)', text: '#fbbf24' },
-  image:    { bg: 'rgba(34, 211, 238, 0.12)', border: 'rgba(34, 211, 238, 0.3)', text: '#22d3ee' },
-  video:    { bg: 'rgba(167, 139, 250, 0.12)', border: 'rgba(167, 139, 250, 0.3)', text: '#a78bfa' },
-};
-
 // ── Icon components ───────────────────────────────────────────────────────────
 
 function IconGear() {
@@ -594,18 +586,19 @@ function SettingsView({
     try {
       const trimmedKey = key.trim();
       const trimmedOpenaiKey = openaiKey.trim();
-      if (trimmedKey)       await promptService.saveApiKey(trimmedKey);
-      if (trimmedOpenaiKey) await promptService.saveOpenaiApiKey(trimmedOpenaiKey);
+      const trimmedOllamaKey = ollamaKey.trim();
+      if (trimmedKey)        await promptService.saveApiKey(trimmedKey);
+      if (trimmedOpenaiKey)  await promptService.saveOpenaiApiKey(trimmedOpenaiKey);
       await promptService.saveOllamaUrl(serverUrl);
-      await promptService.saveOllamaApiKey(ollamaKey);
+      if (trimmedOllamaKey)  await promptService.saveOllamaApiKey(trimmedOllamaKey);
       await promptService.saveSlotConfig(slots);
       await promptService.saveSendTargets(targets);
       onSave({
-        apiKey:       trimmedKey       || currentApiKey,
-        openaiApiKey: trimmedOpenaiKey || currentOpenaiApiKey,
+        apiKey:       trimmedKey        || currentApiKey,
+        openaiApiKey: trimmedOpenaiKey  || currentOpenaiApiKey,
         slotConfig:   slots,
         ollamaUrl:    serverUrl,
-        ollamaApiKey: ollamaKey,
+        ollamaApiKey: trimmedOllamaKey  || currentOllamaApiKey,
         sendTargets:  targets,
       });
     } finally {
@@ -749,7 +742,7 @@ function SettingsView({
             id="ollama-key-input"
             type="password"
             className="text-input"
-            placeholder="Leave empty if not required"
+            placeholder={currentOllamaApiKey ? '••••••••  (saved)' : 'Leave empty if not required'}
             value={ollamaKey}
             onChange={(e) => setOllamaKey(e.target.value)}
             autoComplete="off"
@@ -1160,7 +1153,6 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
               onTabChange={setActiveTab}
               onTierChange={(t) => handleGenerate(t)}
               sendTargets={sendTargets}
-              toast={toast}
               setToast={setToast}
               mode={mode}
               aspectRatio={aspectRatio}
@@ -1290,7 +1282,7 @@ function HistoryPanel({ history, onRestore, onClear, onClose }) {
 
 export function ResultsPanel({
   result, tier, activeTab, onTabChange, onTierChange,
-  sendTargets, toast, setToast,
+  sendTargets, setToast,
   mode, aspectRatio, onAspectRatioChange,
 }) {
   const isMedia = mode === 'image' || mode === 'video';

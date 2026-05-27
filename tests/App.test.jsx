@@ -45,7 +45,6 @@ vi.mock('../src/lib/promptService.js', () => ({
 import * as promptService from '../src/lib/promptService.js';
 
 const DEFAULT_MODEL    = 'claude-haiku-4-5-20251001';
-const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 
 /** Set sensible defaults for every getter so tests don't need to repeat them. */
 function setupDefaultMocks() {
