@@ -584,10 +584,18 @@ function SettingsView({
   const [newTargetName, setNewTargetName] = useState('');
   const [newTargetUrl,  setNewTargetUrl]  = useState('');
 
+  const [closeToTray, setCloseToTray] = useState(false);
+
   const [saving, setSaving] = useState(false);
 
-  // Auto-fetch model lists + Claude CLI status on mount
+  // Auto-fetch model lists + Claude CLI status on mount; load window prefs.
+  // Settings is tall — grow the window so every section is reachable without
+  // resizing by hand. Leaving Settings resizes back to the view-appropriate height.
   useEffect(() => {
+    promptService.resizeWindow({ width: 480, height: 760 });
+
+    promptService.getCloseToTray().then(setCloseToTray).catch(() => {});
+
     promptService.fetchAnthropicModels().then((result) => {
       if (result.success && result.models.length > 0) {
         setAnthropicModels(result.models);
@@ -609,6 +617,12 @@ function SettingsView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function toggleCloseToTray() {
+    const next = !closeToTray;
+    setCloseToTray(next);
+    promptService.saveCloseToTray(next);   // apply immediately
+  }
 
   async function handleFetchModels() {
     setFetchingModels(true);
@@ -929,6 +943,26 @@ function SettingsView({
             </div>
           </div>
         </SettingsSectionCard>
+
+        {/* Window behavior */}
+        <div className="settings-toggle-row">
+          <div className="settings-toggle-text">
+            <span className="settings-toggle-label">Close button minimizes to tray</span>
+            <span className="settings-toggle-desc">
+              {closeToTray ? 'Closing keeps the app running in the tray' : 'Closing quits the app'}
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={closeToTray}
+            aria-label="Close button minimizes to tray"
+            className={`toggle-switch${closeToTray ? ' on' : ''}`}
+            onClick={toggleCloseToTray}
+          >
+            <span className="toggle-knob" />
+          </button>
+        </div>
 
         <button
           className="btn btn-primary btn-full"

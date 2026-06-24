@@ -20,6 +20,8 @@ const isDev = process.env.NODE_ENV === 'development';
 
 let tray = null;
 let win  = null;
+let isQuitting = false;   // set true when a real quit is requested (X without close-to-tray, or tray → Quit)
+let positioned = false;   // anchor the window lower-right only on first show; respect user moves after
 
 // ── System Prompts ───────────────────────────────────────────────────────────
 
@@ -226,8 +228,8 @@ function createWindow() {
     show: false,
     frame: false,
     resizable: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
+    alwaysOnTop: false,
+    skipTaskbar: false,
     transparent: false,
     roundedCorners: true,
     webPreferences: {
@@ -246,15 +248,15 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // Hide on focus loss instead of closing
-  win.on('blur', () => {
-    if (win && win.isVisible()) win.hide();
-  });
-
-  // Intercept close to prevent window destruction — only quit via tray menu
+  // Close behavior depends on the user's "close to tray" preference:
+  //   • on  → hide to tray (the app keeps running in the background)
+  //   • off → let the window close, which quits the app (real-app default)
+  // A real quit (tray → Quit, or X with the toggle off) sets isQuitting first.
   win.on('close', (e) => {
-    e.preventDefault();
-    win.hide();
+    if (!isQuitting && store.get('closeToTray', false)) {
+      e.preventDefault();
+      win.hide();
+    }
   });
 }
 
@@ -272,8 +274,14 @@ function getWindowPosition() {
 }
 
 function showWindow() {
-  const { x, y } = getWindowPosition();
-  win.setPosition(x, y, false);
+  // Anchor lower-right on the first show only; afterwards respect wherever the
+  // user has moved the window (it's a real, movable app now).
+  if (!positioned) {
+    const { x, y } = getWindowPosition();
+    win.setPosition(x, y, false);
+    positioned = true;
+  }
+  if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
 }
@@ -287,6 +295,17 @@ function toggleWindow() {
 ipcMain.on('get-theme-sync', (event) => {
   event.returnValue = store.get('theme', 'dark');
 });
+
+// ── Single instance ──────────────────────────────────────────────────────────
+// A real app should have exactly one instance. If a second launch happens,
+// surface the already-running window instead of starting a duplicate.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) showWindow();
+  });
+}
 
 // ── App ready ─────────────────────────────────────────────────────────────────
 
@@ -308,7 +327,7 @@ app.whenReady().then(() => {
   tray = new Tray(icon);
   tray.setToolTip('PromptForge — Click to open');
 
-  // Left-click: toggle popup
+  // Left-click: toggle window
   tray.on('click', toggleWindow);
 
   // Right-click: context menu
@@ -319,13 +338,16 @@ app.whenReady().then(() => {
       {
         label: 'Quit',
         click: () => {
-          win.removeAllListeners('close');
+          isQuitting = true;
           app.quit();
         },
       },
     ]);
     tray.popUpContextMenu(menu);
   });
+
+  // Open visibly on launch — this is a real app, not a tray-only popup.
+  showWindow();
 
   // ── Provider call helper ──────────────────────────────────────────────────
 
@@ -916,18 +938,40 @@ app.whenReady().then(() => {
     return true;
   });
 
-  // Window chrome controls
-  ipcMain.handle('close-window',    () => win.hide());
-  ipcMain.handle('minimize-window', () => win.hide());
+  // Window chrome controls. The X button respects the "close to tray" setting:
+  // tray-mode hides; otherwise it quits (real-app default). Minimize is a real
+  // OS minimize to the taskbar.
+  ipcMain.handle('close-window', () => {
+    if (store.get('closeToTray', false)) {
+      win.hide();
+    } else {
+      isQuitting = true;
+      win.close();
+    }
+  });
+  ipcMain.handle('minimize-window', () => win.minimize());
+
+  ipcMain.handle('get-close-to-tray', () => store.get('closeToTray', false));
+  ipcMain.handle('save-close-to-tray', (_event, value) => {
+    store.set('closeToTray', !!value);
+    return true;
+  });
 
   // Renderer requests a window resize. Accepts either a number (height only,
   // backwards compatible — width stays at 480) or an object {width, height}.
+  // The window grows/shrinks upward (bottom edge fixed) and is clamped to the
+  // work area, so tall views (e.g. settings) stay fully on-screen wherever the
+  // user has moved the window.
   ipcMain.handle('resize-window', (_event, arg) => {
     const width  = (typeof arg === 'object' && arg && typeof arg.width  === 'number') ? arg.width  : 480;
-    const height = (typeof arg === 'object' && arg && typeof arg.height === 'number') ? arg.height : arg;
-    win.setSize(width, height, false);
-    const { x, y } = getWindowPosition();
-    win.setPosition(x, y, false);
+    let   height = (typeof arg === 'object' && arg && typeof arg.height === 'number') ? arg.height : arg;
+    const wa = screen.getPrimaryDisplay().workArea;
+    height = Math.min(height, wa.height);
+    const b = win.getBounds();
+    let y = b.y + b.height - height;            // keep the bottom edge fixed
+    y = Math.max(wa.y, Math.min(y, wa.y + wa.height - height));
+    let x = Math.max(wa.x, Math.min(b.x, wa.x + wa.width - width));
+    win.setBounds({ x, y, width, height });
   });
 
   // ── Mode + aspect-ratio persistence ────────────────────────────────────────
@@ -958,7 +1002,8 @@ app.whenReady().then(() => {
   });
 });
 
-// Keep the process alive when the popup window is hidden
-app.on('window-all-closed', (e) => {
-  e.preventDefault();
+// When the window is actually closed (close-to-tray off), quit the app. In
+// tray mode the window hides rather than closes, so this never fires then.
+app.on('window-all-closed', () => {
+  app.quit();
 });

@@ -20,6 +20,8 @@ vi.mock('../src/lib/promptService.js', () => ({
   closeWindow:         vi.fn(),
   minimizeWindow:      vi.fn(),
   resizeWindow:        vi.fn(),
+  getCloseToTray:      vi.fn(),
+  saveCloseToTray:     vi.fn(),
   getSlotConfig:       vi.fn(),
   saveSlotConfig:      vi.fn(),
   getOllamaUrl:        vi.fn(),
@@ -65,6 +67,8 @@ function setupDefaultMocks() {
   promptService.getOllamaApiKey.mockResolvedValue('');
   promptService.getEndpointFormat.mockResolvedValue('openai');
   promptService.saveEndpointFormat.mockResolvedValue(true);
+  promptService.getCloseToTray.mockResolvedValue(false);
+  promptService.saveCloseToTray.mockResolvedValue(true);
   promptService.fetchOllamaModels.mockResolvedValue({ success: true, models: [] });
   promptService.fetchAnthropicModels.mockResolvedValue({ success: true, models: ['claude-sonnet-4-5-20250514'] });
   promptService.getSendTargets.mockResolvedValue([

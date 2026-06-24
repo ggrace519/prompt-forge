@@ -319,3 +319,23 @@ describe('custom endpoint format', () => {
     expect(fmt).toBe('anthropic');
   });
 });
+
+// ── Close-to-tray preference ──────────────────────────────────────────────────
+
+describe('close-to-tray preference', () => {
+  beforeEach(() => {
+    mockIPC.getCloseToTray = vi.fn();
+    mockIPC.saveCloseToTray = vi.fn();
+  });
+
+  it('reads the saved preference', async () => {
+    mockIPC.getCloseToTray.mockResolvedValue(true);
+    expect(await promptService.getCloseToTray()).toBe(true);
+  });
+
+  it('persists the preference', async () => {
+    mockIPC.saveCloseToTray.mockResolvedValue(true);
+    await promptService.saveCloseToTray(false);
+    expect(mockIPC.saveCloseToTray).toHaveBeenCalledWith(false);
+  });
+});

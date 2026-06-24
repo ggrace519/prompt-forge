@@ -89,6 +89,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resizeWindow: (arg) =>
     ipcRenderer.invoke('resize-window', arg),
 
+  // Close-to-tray preference
+  getCloseToTray: () =>
+    ipcRenderer.invoke('get-close-to-tray'),
+  saveCloseToTray: (value) =>
+    ipcRenderer.invoke('save-close-to-tray', value),
+
   // Mode + aspect-ratio persistence
   getLastMode: () =>
     ipcRenderer.invoke('get-last-mode'),

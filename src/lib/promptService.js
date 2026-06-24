@@ -157,6 +157,16 @@ export async function resizeWindow(height) {
   return getIPC().resizeWindow(height);
 }
 
+// ── Close-to-tray preference ────────────────────────────────────────────────
+
+export async function getCloseToTray() {
+  return getIPC().getCloseToTray();
+}
+
+export async function saveCloseToTray(value) {
+  return getIPC().saveCloseToTray(value);
+}
+
 // ── Mode + aspect-ratio persistence ─────────────────────────────────────────
 
 export async function getLastMode() {
