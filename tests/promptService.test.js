@@ -291,3 +291,31 @@ describe('resizeWindow', () => {
     expect(mockIPC.resizeWindow).toHaveBeenCalledWith({ width: 640, height: 720 });
   });
 });
+
+// ── Custom endpoint format ────────────────────────────────────────────────────
+
+describe('custom endpoint format', () => {
+  beforeEach(() => {
+    mockIPC.fetchOllamaModels = vi.fn();
+    mockIPC.saveEndpointFormat = vi.fn();
+    mockIPC.getEndpointFormat = vi.fn();
+  });
+
+  it('threads the wire format through to fetchOllamaModels', async () => {
+    mockIPC.fetchOllamaModels.mockResolvedValue({ success: true, models: ['llama3'] });
+    await promptService.fetchOllamaModels('http://host:1234', 'key-abc', 'anthropic');
+    expect(mockIPC.fetchOllamaModels).toHaveBeenCalledWith('http://host:1234', 'key-abc', 'anthropic');
+  });
+
+  it('persists the selected format', async () => {
+    mockIPC.saveEndpointFormat.mockResolvedValue(true);
+    await promptService.saveEndpointFormat('ollama');
+    expect(mockIPC.saveEndpointFormat).toHaveBeenCalledWith('ollama');
+  });
+
+  it('reads the saved format', async () => {
+    mockIPC.getEndpointFormat.mockResolvedValue('anthropic');
+    const fmt = await promptService.getEndpointFormat();
+    expect(fmt).toBe('anthropic');
+  });
+});

@@ -330,10 +330,68 @@ app.whenReady().then(() => {
   // ── Provider call helper ──────────────────────────────────────────────────
 
   async function callProvider(creds, systemPrompt, userMessage, maxTokens = 16384) {
-    const { provider, authMethod, model, apiKey, openaiApiKey, ollamaUrl, ollamaApiKey } = creds;
+    const { provider, authMethod, model, apiKey, openaiApiKey, ollamaUrl, ollamaApiKey, endpointFormat } = creds;
 
+    // The `ollama` provider value is a custom user-supplied endpoint. The
+    // `endpointFormat` selects which wire protocol to speak against that URL:
+    //   'openai'    → POST {url}/v1/chat/completions  (default; broadest compat)
+    //   'ollama'    → POST {url}/api/chat             (native Ollama)
+    //   'anthropic' → POST {url}/v1/messages          (Anthropic-compatible)
     if (provider === 'ollama') {
       const baseUrl = (ollamaUrl || 'http://localhost:11434').replace(/\/+$/, '');
+      const format = endpointFormat || 'openai';
+
+      if (format === 'anthropic') {
+        const headers = { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' };
+        if (ollamaApiKey) headers['x-api-key'] = ollamaApiKey;
+
+        const res = await fetch(`${baseUrl}/v1/messages`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          throw new Error(`Custom endpoint (Anthropic) ${res.status}: ${body}`);
+        }
+        const data = await res.json();
+        const textBlock = (data.content || []).find((b) => b.type === 'text');
+        if (!textBlock?.text) throw new Error('Custom endpoint returned no content');
+        return textBlock.text;
+      }
+
+      if (format === 'ollama') {
+        const headers = { 'Content-Type': 'application/json' };
+        if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
+
+        const res = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage },
+            ],
+            stream: false,
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          throw new Error(`Custom endpoint (Ollama) ${res.status}: ${body}`);
+        }
+        const data = await res.json();
+        const content = data.message?.content;
+        if (!content) throw new Error('Custom endpoint returned no content');
+        return content;
+      }
+
+      // OpenAI-compatible (default)
       const headers = { 'Content-Type': 'application/json' };
       if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
 
@@ -351,11 +409,11 @@ app.whenReady().then(() => {
       });
       if (!res.ok) {
         const body = await res.text().catch(() => '');
-        throw new Error(`Ollama ${res.status}: ${body}`);
+        throw new Error(`Custom endpoint (OpenAI) ${res.status}: ${body}`);
       }
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content;
-      if (!content) throw new Error('Ollama returned no content');
+      if (!content) throw new Error('Custom endpoint returned no content');
       return content;
     }
 
@@ -484,6 +542,7 @@ app.whenReady().then(() => {
       openaiApiKey: readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted'),
       ollamaUrl:    store.get('ollamaUrl', 'http://localhost:11434'),
       ollamaApiKey: readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted'),
+      endpointFormat: store.get('endpointFormat', 'openai'),
     };
   }
 
@@ -647,17 +706,35 @@ app.whenReady().then(() => {
     }
   });
 
-  // Fetch available models from an Ollama server
-  ipcMain.handle('fetch-ollama-models', async (_event, { url, apiKey }) => {
+  // Fetch available models from a custom endpoint. The listing route depends on
+  // the wire format: native Ollama lists at /api/tags; OpenAI- and Anthropic-
+  // compatible endpoints list at /v1/models ({ data: [{ id }] }).
+  ipcMain.handle('fetch-ollama-models', async (_event, { url, apiKey, format }) => {
     try {
       const baseUrl = (url || 'http://localhost:11434').replace(/\/+$/, '');
-      const headers = {};
-      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+      const fmt = format || 'openai';
 
-      const res = await fetch(`${baseUrl}/api/tags`, { headers });
+      if (fmt === 'ollama') {
+        const headers = {};
+        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+        const res = await fetch(`${baseUrl}/api/tags`, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const models = (data.models || []).map((m) => m.name).filter(Boolean).sort();
+        return { success: true, models };
+      }
+
+      const headers = {};
+      if (fmt === 'anthropic') {
+        headers['anthropic-version'] = '2023-06-01';
+        if (apiKey) headers['x-api-key'] = apiKey;
+      } else if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      const res = await fetch(`${baseUrl}/v1/models`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const models = (data.models || []).map((m) => m.name).filter(Boolean).sort();
+      const models = (data.data || []).map((m) => m.id).filter(Boolean).sort();
       return { success: true, models };
     } catch (err) {
       return { success: false, error: err.message || String(err) };
@@ -762,6 +839,13 @@ app.whenReady().then(() => {
   ipcMain.handle('get-ollama-api-key', () => {
     return readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted');
   });
+
+  // Custom-endpoint wire format: 'openai' | 'ollama' | 'anthropic'
+  ipcMain.handle('save-endpoint-format', (_event, format) => {
+    store.set('endpointFormat', format);
+    return true;
+  });
+  ipcMain.handle('get-endpoint-format', () => store.get('endpointFormat', 'openai'));
 
   // ── Slot config ─────────────────────────────────────────────────────────────
 

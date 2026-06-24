@@ -24,6 +24,17 @@ const FALLBACK_OPENAI_MODELS = [
   'gpt-4o-mini',
 ];
 
+// Wire formats a custom endpoint can speak. The encoded slot provider stays
+// 'ollama' for backward compatibility; the format is a shared endpoint setting.
+const ENDPOINT_FORMATS = [
+  { value: 'openai',    label: 'OpenAI-compatible' },
+  { value: 'ollama',    label: 'Ollama (native)' },
+  { value: 'anthropic', label: 'Anthropic / Claude' },
+];
+
+const endpointFormatLabel = (v) =>
+  (ENDPOINT_FORMATS.find((f) => f.value === v) || ENDPOINT_FORMATS[0]).label;
+
 // ── Slot encoding helpers ─────────────────────────────────────────────────────
 // A slot is `{ provider, authMethod, model }` where authMethod distinguishes
 // `anthropic` API-key from Claude Code subscription. Encoded form is used as
@@ -353,6 +364,7 @@ export default function App() {
   const [slotConfig,    setSlotConfig]    = useState(null);
   const [ollamaUrl,     setOllamaUrl]     = useState('http://localhost:11434');
   const [ollamaApiKey,  setOllamaApiKey]  = useState('');
+  const [endpointFormat, setEndpointFormat] = useState('openai');
   const [sendTargets,   setSendTargets]   = useState([]);
   const [history,       setHistory]       = useState([]);
   const [theme,         setTheme]         = useState('dark');
@@ -364,10 +376,11 @@ export default function App() {
       promptService.getSlotConfig(),
       promptService.getOllamaUrl(),
       promptService.getOllamaApiKey(),
+      promptService.getEndpointFormat(),
       promptService.getSendTargets(),
       promptService.getHistory(),
       promptService.getTheme(),
-    ]).then(([key, openaiKey, slots, oUrl, oKey, targets, hist, savedTheme]) => {
+    ]).then(([key, openaiKey, slots, oUrl, oKey, eFormat, targets, hist, savedTheme]) => {
       setApiKey(key || '');
       setOpenaiApiKey(openaiKey || '');
       setSlotConfig(slots || {
@@ -377,6 +390,7 @@ export default function App() {
       });
       setOllamaUrl(oUrl || 'http://localhost:11434');
       setOllamaApiKey(oKey || '');
+      setEndpointFormat(eFormat || 'openai');
       setSendTargets(targets || []);
       setHistory(hist || []);
       setTheme(savedTheme || 'dark');
@@ -392,6 +406,7 @@ export default function App() {
     setSlotConfig(config.slotConfig);
     setOllamaUrl(config.ollamaUrl);
     setOllamaApiKey(config.ollamaApiKey);
+    setEndpointFormat(config.endpointFormat);
     setSendTargets(config.sendTargets);
     setView('main');
   }, []);
@@ -421,6 +436,7 @@ export default function App() {
         slotConfig={slotConfig}
         ollamaUrl={ollamaUrl}
         ollamaApiKey={ollamaApiKey}
+        endpointFormat={endpointFormat}
         sendTargets={sendTargets}
         onSave={handleSettingsSaved}
         onBack={canGoBack ? () => setView('main') : null}
@@ -436,6 +452,7 @@ export default function App() {
       setSlotConfig={setSlotConfig}
       ollamaUrl={ollamaUrl}
       ollamaApiKey={ollamaApiKey}
+      endpointFormat={endpointFormat}
       openaiApiKey={openaiApiKey}
       sendTargets={sendTargets}
       history={history}
@@ -523,7 +540,7 @@ function SlotModelSelect({
             : <option disabled value="">Add OpenAI key to enable</option>
           }
         </optgroup>
-        <optgroup label="Ollama">
+        <optgroup label="Custom Endpoint">
           {ollamaList.length > 0
             ? ollamaList.map((m) => (
                 <option key={`l-${m}`} value={`ollama:apiKey:${m}`}>{m}</option>
@@ -540,6 +557,7 @@ function SettingsView({
   apiKey: currentApiKey, openaiApiKey: currentOpenaiApiKey,
   slotConfig: currentSlotConfig,
   ollamaUrl: currentOllamaUrl, ollamaApiKey: currentOllamaApiKey,
+  endpointFormat: currentEndpointFormat,
   sendTargets: currentSendTargets,
   onSave, onBack,
   theme, onToggleTheme,
@@ -548,6 +566,7 @@ function SettingsView({
   const [openaiKey,       setOpenaiKey]       = useState('');
   const [serverUrl,       setServerUrl]       = useState(currentOllamaUrl || 'http://localhost:11434');
   const [ollamaKey,       setOllamaKey]       = useState('');
+  const [format,          setFormat]          = useState(currentEndpointFormat || 'openai');
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [openaiModels,    setOpenaiModels]    = useState(FALLBACK_OPENAI_MODELS);
   const [ollamaModels,    setOllamaModels]    = useState([]);
@@ -595,14 +614,14 @@ function SettingsView({
     setFetchingModels(true);
     setFetchError('');
     try {
-      const result = await promptService.fetchOllamaModels(serverUrl, ollamaKey);
+      const result = await promptService.fetchOllamaModels(serverUrl, ollamaKey, format);
       if (result.success) {
         setOllamaModels(result.models);
         if (result.models.length === 0) {
-          setFetchError('Server responded but returned 0 models');
+          setFetchError('Endpoint responded but returned 0 models');
         }
       } else {
-        setFetchError(result.error || 'Could not connect to Ollama server');
+        setFetchError(result.error || 'Could not connect to the endpoint');
       }
     } catch (err) {
       setFetchError('IPC error: ' + (err.message || String(err)));
@@ -637,15 +656,17 @@ function SettingsView({
       if (trimmedOpenaiKey) await promptService.saveOpenaiApiKey(trimmedOpenaiKey);
       await promptService.saveOllamaUrl(serverUrl);
       await promptService.saveOllamaApiKey(ollamaKey);
+      await promptService.saveEndpointFormat(format);
       await promptService.saveSlotConfig(slots);
       await promptService.saveSendTargets(targets);
       onSave({
-        apiKey:       trimmedKey       || currentApiKey,
-        openaiApiKey: trimmedOpenaiKey || currentOpenaiApiKey,
-        slotConfig:   slots,
-        ollamaUrl:    serverUrl,
-        ollamaApiKey: ollamaKey,
-        sendTargets:  targets,
+        apiKey:        trimmedKey       || currentApiKey,
+        openaiApiKey:  trimmedOpenaiKey || currentOpenaiApiKey,
+        slotConfig:    slots,
+        ollamaUrl:     serverUrl,
+        ollamaApiKey:  ollamaKey,
+        endpointFormat: format,
+        sendTargets:   targets,
       });
     } finally {
       setSaving(false);
@@ -765,16 +786,18 @@ function SettingsView({
           )}
         </SettingsSectionCard>
 
-        {/* Local AI */}
+        {/* Custom Endpoint */}
         <SettingsSectionCard
-          title="Local AI (Ollama)"
-          summary={ollamaModels.length > 0 ? `${ollamaModels.length} model${ollamaModels.length > 1 ? 's' : ''}` : serverUrl}
+          title="Custom Endpoint"
+          summary={ollamaModels.length > 0
+            ? `${endpointFormatLabel(format)} · ${ollamaModels.length} model${ollamaModels.length > 1 ? 's' : ''}`
+            : endpointFormatLabel(format)}
           defaultOpen={false}
         >
           <div className="field-group">
-            <label className="field-label" htmlFor="ollama-url-input">Server URL</label>
+            <label className="field-label" htmlFor="endpoint-url-input">Server URL</label>
             <input
-              id="ollama-url-input"
+              id="endpoint-url-input"
               type="url"
               className="text-input"
               placeholder="http://localhost:11434"
@@ -785,11 +808,24 @@ function SettingsView({
             />
           </div>
           <div className="field-group">
-            <label className="field-label" htmlFor="ollama-key-input">
+            <label className="field-label" htmlFor="endpoint-format-select">API Format</label>
+            <select
+              id="endpoint-format-select"
+              className="text-input select-input"
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+            >
+              {ENDPOINT_FORMATS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field-group">
+            <label className="field-label" htmlFor="endpoint-key-input">
               API Key <span className="field-label-optional">(optional)</span>
             </label>
             <input
-              id="ollama-key-input"
+              id="endpoint-key-input"
               type="password"
               className="text-input"
               placeholder="Leave empty if not required"
@@ -908,7 +944,7 @@ function SettingsView({
 
 // ── MainView ──────────────────────────────────────────────────────────────────
 
-function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
+function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpointFormat, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
   const [task,         setTask]         = useState('');
   const [mode,         setMode]         = useState('text');
   const [aspectRatio,  setAspectRatio]  = useState('1:1');
@@ -953,11 +989,11 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
     }).catch(() => {});
 
     if (ollamaUrl) {
-      promptService.fetchOllamaModels(ollamaUrl, ollamaApiKey || '').then((result) => {
+      promptService.fetchOllamaModels(ollamaUrl, ollamaApiKey || '', endpointFormat).then((result) => {
         if (result.success) setOllamaModels(result.models);
       });
     }
-  }, [ollamaUrl, ollamaApiKey, openaiApiKey]);
+  }, [ollamaUrl, ollamaApiKey, endpointFormat, openaiApiKey]);
 
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
@@ -1286,7 +1322,7 @@ function OverrideSlot({
           </optgroup>
         )}
         {ollamaList.length > 0 && (
-          <optgroup label="Ollama">
+          <optgroup label="Custom Endpoint">
             {ollamaList.map((m) => (
               <option key={`l-${m}`} value={`ollama:apiKey:${m}`}>{m}</option>
             ))}

@@ -54,10 +54,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-ollama-api-key', key),
   getOllamaApiKey: () =>
     ipcRenderer.invoke('get-ollama-api-key'),
-  fetchOllamaModels: (url, apiKey) =>
-    ipcRenderer.invoke('fetch-ollama-models', { url, apiKey }),
+  fetchOllamaModels: (url, apiKey, format) =>
+    ipcRenderer.invoke('fetch-ollama-models', { url, apiKey, format }),
   fetchAnthropicModels: () =>
     ipcRenderer.invoke('fetch-anthropic-models'),
+
+  // Custom-endpoint wire format
+  saveEndpointFormat: (format) =>
+    ipcRenderer.invoke('save-endpoint-format', format),
+  getEndpointFormat: () =>
+    ipcRenderer.invoke('get-endpoint-format'),
 
   // Send targets
   getSendTargets: () =>

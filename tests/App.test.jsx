@@ -27,6 +27,8 @@ vi.mock('../src/lib/promptService.js', () => ({
   getOllamaApiKey:     vi.fn(),
   saveOllamaApiKey:    vi.fn(),
   fetchOllamaModels:   vi.fn(),
+  getEndpointFormat:   vi.fn(),
+  saveEndpointFormat:  vi.fn(),
   fetchAnthropicModels: vi.fn(),
   getSendTargets:      vi.fn(),
   saveSendTargets:     vi.fn(),
@@ -61,6 +63,8 @@ function setupDefaultMocks() {
   });
   promptService.getOllamaUrl.mockResolvedValue('http://localhost:11434');
   promptService.getOllamaApiKey.mockResolvedValue('');
+  promptService.getEndpointFormat.mockResolvedValue('openai');
+  promptService.saveEndpointFormat.mockResolvedValue(true);
   promptService.fetchOllamaModels.mockResolvedValue({ success: true, models: [] });
   promptService.fetchAnthropicModels.mockResolvedValue({ success: true, models: ['claude-sonnet-4-5-20250514'] });
   promptService.getSendTargets.mockResolvedValue([

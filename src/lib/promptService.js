@@ -89,8 +89,16 @@ export async function getOllamaUrl()     { return getIPC().getOllamaUrl(); }
 export async function saveOllamaApiKey(key) { return getIPC().saveOllamaApiKey(key); }
 export async function getOllamaApiKey()     { return getIPC().getOllamaApiKey(); }
 
-export async function fetchOllamaModels(url, apiKey) {
-  return getIPC().fetchOllamaModels(url, apiKey);
+export async function fetchOllamaModels(url, apiKey, format) {
+  return getIPC().fetchOllamaModels(url, apiKey, format);
+}
+
+export async function saveEndpointFormat(format) {
+  return getIPC().saveEndpointFormat(format);
+}
+
+export async function getEndpointFormat() {
+  return getIPC().getEndpointFormat();
 }
 
 export async function fetchAnthropicModels() {

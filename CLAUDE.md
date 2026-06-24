@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Windows system-tray Electron app that turns plain task descriptions into structured AI prompts. Supports four provider+auth combinations: Anthropic via API key, Anthropic via Claude Code subscription (`@anthropic-ai/claude-agent-sdk`), OpenAI via API key, and a local Ollama server. React 18 renderer, Vite build, frameless 480px-wide popup anchored to the lower-right corner of the primary display.
+Windows system-tray Electron app that turns plain task descriptions into structured AI prompts. Supports four provider+auth combinations: Anthropic via API key, Anthropic via Claude Code subscription (`@anthropic-ai/claude-agent-sdk`), OpenAI via API key, and a custom user-supplied endpoint that can speak OpenAI-compatible, native-Ollama, or Anthropic-compatible wire formats. React 18 renderer, Vite build, frameless 480px-wide popup anchored to the lower-right corner of the primary display.
 
 ## Commands
 
@@ -66,7 +66,9 @@ Each slot stores `{ provider, authMethod, model }`:
 - `authMethod` — `'apiKey'` | `'subscription'` (only meaningful for `anthropic`; everything else is `'apiKey'`)
 - `model` — model id string
 
-Shared across slots: Anthropic API key, OpenAI API key, Ollama URL + Ollama API key (all DPAPI-encrypted at rest).
+The `'ollama'` provider value is a **custom user-supplied endpoint** (kept named `ollama` for backward compatibility). Its wire protocol is chosen by the shared `endpointFormat` setting — `'openai'` (default) | `'ollama'` | `'anthropic'` — so the same URL can target an OpenAI-compatible, native-Ollama, or Anthropic-compatible server.
+
+Shared across slots: Anthropic API key, OpenAI API key, custom-endpoint URL + API key + `endpointFormat` (the keys are DPAPI-encrypted at rest; URL and format are plaintext config).
 
 ### Provider Dispatch
 
@@ -77,7 +79,7 @@ Shared across slots: Anthropic API key, OpenAI API key, Ollama URL + Ollama API 
 | `anthropic` | `apiKey` | `fetch('https://api.anthropic.com/v1/messages')` |
 | `anthropic` | `subscription` | Lazy `await import('@anthropic-ai/claude-agent-sdk')`, `query()` with `settingSources: []`, `permissionMode: 'bypassPermissions'`, `allowedTools: []`, `maxTurns: 1`. Reads OAuth creds from the local Claude Code CLI install. |
 | `openai` | `apiKey` | `fetch('https://api.openai.com/v1/chat/completions')` with bearer auth |
-| `ollama` | `apiKey` | `fetch('${ollamaUrl}/v1/chat/completions')` |
+| `ollama` (custom endpoint) | `apiKey` | Routes by `endpointFormat`: `'openai'` → `fetch('${url}/v1/chat/completions')` (bearer); `'ollama'` → `fetch('${url}/api/chat')` (bearer, native response shape); `'anthropic'` → `fetch('${url}/v1/messages')` (`x-api-key` + `anthropic-version`) |
 
 The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge. First subscription call has ~1-2s cold-import overhead.
 
@@ -107,9 +109,10 @@ The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge
 | `save-api-key` / `get-api-key` | invoke | Shared Anthropic API key (encrypted) |
 | `save-openai-api-key` / `get-openai-api-key` | invoke | Shared OpenAI API key (encrypted) |
 | `get-slot-config` / `save-slot-config` | invoke | Three-slot `{provider, authMethod, model}` configuration |
-| `save-ollama-url` / `get-ollama-url` | invoke | Shared Ollama server URL |
-| `save-ollama-api-key` / `get-ollama-api-key` | invoke | Shared Ollama API key (encrypted) |
-| `fetch-ollama-models` | invoke | List models from Ollama server |
+| `save-ollama-url` / `get-ollama-url` | invoke | Shared custom-endpoint URL |
+| `save-ollama-api-key` / `get-ollama-api-key` | invoke | Shared custom-endpoint API key (encrypted) |
+| `save-endpoint-format` / `get-endpoint-format` | invoke | Custom-endpoint wire format (`'openai'` \| `'ollama'` \| `'anthropic'`, default `'openai'`) |
+| `fetch-ollama-models` | invoke | List models from the custom endpoint. Route depends on format: `/api/tags` (ollama) or `/v1/models` (openai/anthropic) |
 | `fetch-anthropic-models` | invoke | List available Anthropic models (uses shared API key) |
 | `fetch-openai-models` | invoke | List available OpenAI models (uses shared OpenAI key, filters to `gpt-*` / `o*` / `chatgpt-*`) |
 | `check-claude-cli-status` | invoke | Probe local `claude --version` via `child_process.exec` (3s timeout). Returns `{installed, version?}` for the subscription auth indicator. |
