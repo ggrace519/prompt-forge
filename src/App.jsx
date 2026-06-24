@@ -280,6 +280,21 @@ function AspectRatioSelect({ value, onChange }) {
   );
 }
 
+// ── StepIndicator — visual progress for the 2-call classify→generate flow ────
+
+function StepIndicator({ step }) {
+  const classified = step === 'generating';
+  return (
+    <span className="step-indicator" aria-label={step === 'classifying' ? 'Classifying…' : 'Generating…'}>
+      <span className={`step-pip${classified ? ' done' : ' pulse'}`} />
+      <span className={`step-label${step === 'classifying' ? ' active' : ''}`}>Classify</span>
+      <span className="step-arrow">›</span>
+      <span className={`step-pip${classified ? ' pulse' : ''}`} />
+      <span className={`step-label${step === 'generating' ? ' active' : ''}`}>Generate</span>
+    </span>
+  );
+}
+
 // ── Shared components ─────────────────────────────────────────────────────────
 
 function WindowControls() {
@@ -1017,7 +1032,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
   }
 
   const buttonText = loading
-    ? (loadingStep === 'classifying' ? <><span className="btn-spinner" /> Classifying...</> : <><span className="btn-spinner" /> Generating...</>)
+    ? <StepIndicator step={loadingStep} />
     : 'Generate Prompt';
 
   return (

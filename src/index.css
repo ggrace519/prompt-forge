@@ -207,6 +207,49 @@ button, label, span, h1, p {
   to { transform: rotate(360deg); }
 }
 
+/* ── Generation step indicator ──────────────────────────────────────────────── */
+
+.step-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.step-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.step-pip.done  { background: rgba(255, 255, 255, 0.9); }
+.step-pip.pulse {
+  background: #ffffff;
+  animation: pip-pulse 0.75s ease infinite alternate;
+}
+
+@keyframes pip-pulse {
+  from { opacity: 0.5; transform: scale(0.75); }
+  to   { opacity: 1;   transform: scale(1.2); }
+}
+
+.step-arrow {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.15s ease;
+}
+
+.step-label.active { color: #ffffff; }
+
 /* ── Settings view ──────────────────────────────────────────────────────────── */
 
 .settings-view {
