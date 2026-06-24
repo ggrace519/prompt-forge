@@ -447,6 +447,30 @@ export default function App() {
   );
 }
 
+// ── SettingsSectionCard ───────────────────────────────────────────────────────
+
+function SettingsSectionCard({ title, summary, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="settings-section">
+      <button
+        className="settings-section-toggle"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        <span className="settings-section-label">{title}</span>
+        {summary && <span className="settings-section-summary">{summary}</span>}
+        <IconChevron up={open} />
+      </button>
+      {open && (
+        <div className="settings-section-body">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── SettingsView ──────────────────────────────────────────────────────────────
 
 /** Unified model dropdown — Anthropic (API/subscription) + OpenAI + Ollama. */
@@ -674,190 +698,201 @@ function SettingsView({
           <img src={logoUrl} alt="PromptForge" className="app-logo" />
         </div>
 
-        {/* Shared Anthropic API Key */}
-        <div className="field-group">
-          <label className="field-label" htmlFor="api-key-input">
-            Anthropic API Key
-          </label>
-          <input
-            id="api-key-input"
-            type="password"
-            className="text-input"
-            placeholder={currentApiKey ? '••••••••  (saved)' : 'sk-ant-api03-...'}
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <p className="settings-desc" style={{ textAlign: 'left', padding: 0, marginTop: 2 }}>
-            Encrypted with Windows DPAPI. <a className="link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Get a key</a>
-          </p>
-        </div>
-
-        {/* Shared OpenAI API Key */}
-        <div className="field-group">
-          <label className="field-label" htmlFor="openai-key-input">
-            OpenAI API Key
-          </label>
-          <input
-            id="openai-key-input"
-            type="password"
-            className="text-input"
-            placeholder={currentOpenaiApiKey ? '••••••••  (saved)' : 'sk-...'}
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <p className="settings-desc" style={{ textAlign: 'left', padding: 0, marginTop: 2 }}>
-            Encrypted with Windows DPAPI. <a className="link" href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">Get a key</a>
-          </p>
-        </div>
-
-        {/* Claude Code subscription status — only relevant when a slot uses it */}
-        {usesSubscription && (
-          <div className="field-group" style={{ marginTop: -4 }}>
-            {cliStatus === null && (
-              <p className="settings-desc" style={{ textAlign: 'left', padding: 0 }}>
-                Checking Claude Code CLI…
-              </p>
-            )}
-            {cliStatus && cliStatus.installed && (
-              <p className="settings-desc" style={{ textAlign: 'left', padding: 0, color: '#4ade80' }}>
-                ✓ Claude Code detected{cliStatus.version ? ` (${cliStatus.version})` : ''} — subscription auth enabled.
-              </p>
-            )}
-            {cliStatus && !cliStatus.installed && (
-              <p className="settings-desc" style={{ textAlign: 'left', padding: 0, color: '#f59e0b' }}>
-                ⚠ Claude Code CLI not detected. <a
-                  className="link"
-                  href="https://docs.claude.com/en/docs/claude-code/setup"
-                  target="_blank" rel="noreferrer"
-                >Install &amp; sign in</a> to use the subscription auth path.
-              </p>
-            )}
+        {/* API Keys */}
+        <SettingsSectionCard
+          title="API Keys"
+          summary={[
+            hasAnthropicKey ? 'Anthropic ✓' : null,
+            hasOpenaiKey ? 'OpenAI ✓' : null,
+          ].filter(Boolean).join(' · ') || 'Not configured'}
+        >
+          <div className="field-group">
+            <label className="field-label" htmlFor="api-key-input">Anthropic API Key</label>
+            <input
+              id="api-key-input"
+              type="password"
+              className="text-input"
+              placeholder={currentApiKey ? '••••••••  (saved)' : 'sk-ant-api03-...'}
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="settings-desc" style={{ textAlign: 'left', padding: 0, marginTop: 2 }}>
+              Encrypted with Windows DPAPI. <a className="link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">Get a key</a>
+            </p>
           </div>
-        )}
 
-        {/* Shared Ollama Config */}
-        <div className="field-group">
-          <label className="field-label" htmlFor="ollama-url-input">
-            Ollama Server URL
-          </label>
-          <input
-            id="ollama-url-input"
-            type="url"
-            className="text-input"
-            placeholder="http://localhost:11434"
-            value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
+          <div className="field-group">
+            <label className="field-label" htmlFor="openai-key-input">OpenAI API Key</label>
+            <input
+              id="openai-key-input"
+              type="password"
+              className="text-input"
+              placeholder={currentOpenaiApiKey ? '••••••••  (saved)' : 'sk-...'}
+              value={openaiKey}
+              onChange={(e) => setOpenaiKey(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="settings-desc" style={{ textAlign: 'left', padding: 0, marginTop: 2 }}>
+              Encrypted with Windows DPAPI. <a className="link" href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">Get a key</a>
+            </p>
+          </div>
 
-        <div className="field-group">
-          <label className="field-label" htmlFor="ollama-key-input">
-            Ollama API Key <span className="field-label-optional">(optional)</span>
-          </label>
-          <input
-            id="ollama-key-input"
-            type="password"
-            className="text-input"
-            placeholder="Leave empty if not required"
-            value={ollamaKey}
-            onChange={(e) => setOllamaKey(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-
-        <div className="ollama-fetch-row">
-          <button
-            className="btn btn-secondary"
-            onClick={handleFetchModels}
-            disabled={!serverUrl || fetchingModels}
-          >
-            {fetchingModels
-              ? <><span className="btn-spinner" /> Connecting...</>
-              : 'Fetch Models'}
-          </button>
-          {fetchError && (
-            <span className="ollama-fetch-error" role="alert">{fetchError}</span>
-          )}
-        </div>
-
-        {/* Slot model selectors */}
-        <SlotModelSelect
-          label="Classification Model"
-          slotKey="classify"
-          config={slots.classify}
-          onChange={(v) => updateSlot('classify', v)}
-          anthropicModels={anthropicModels}
-          openaiModels={openaiModels}
-          ollamaModels={ollamaModels}
-        />
-        <SlotModelSelect
-          label="Simple & Standard Generation"
-          slotKey="generateSimple"
-          config={slots.generateSimple}
-          onChange={(v) => updateSlot('generateSimple', v)}
-          anthropicModels={anthropicModels}
-          openaiModels={openaiModels}
-          ollamaModels={ollamaModels}
-        />
-        <SlotModelSelect
-          label="Complex Generation"
-          slotKey="generateComplex"
-          config={slots.generateComplex}
-          onChange={(v) => updateSlot('generateComplex', v)}
-          anthropicModels={anthropicModels}
-          openaiModels={openaiModels}
-          ollamaModels={ollamaModels}
-        />
-
-        {/* Send targets */}
-        <div className="field-group">
-          <label className="field-label">Send-to Targets</label>
-          {targets.map((t, i) => (
-            <div key={i} className="send-target-row">
-              <span className="send-target-name">{t.name}</span>
-              <span className="send-target-url">{t.url}</span>
-              <button
-                className="send-target-remove"
-                onClick={() => removeTarget(i)}
-                aria-label={`Remove ${t.name}`}
-              >
-                <IconX />
-              </button>
+          {usesSubscription && (
+            <div className="field-group" style={{ marginTop: -4 }}>
+              {cliStatus === null && (
+                <p className="settings-desc" style={{ textAlign: 'left', padding: 0 }}>
+                  Checking Claude Code CLI…
+                </p>
+              )}
+              {cliStatus && cliStatus.installed && (
+                <p className="settings-desc" style={{ textAlign: 'left', padding: 0, color: '#4ade80' }}>
+                  ✓ Claude Code detected{cliStatus.version ? ` (${cliStatus.version})` : ''} — subscription auth enabled.
+                </p>
+              )}
+              {cliStatus && !cliStatus.installed && (
+                <p className="settings-desc" style={{ textAlign: 'left', padding: 0, color: '#f59e0b' }}>
+                  ⚠ Claude Code CLI not detected. <a
+                    className="link"
+                    href="https://docs.claude.com/en/docs/claude-code/setup"
+                    target="_blank" rel="noreferrer"
+                  >Install &amp; sign in</a> to use the subscription auth path.
+                </p>
+              )}
             </div>
-          ))}
-          <div className="send-target-add">
+          )}
+        </SettingsSectionCard>
+
+        {/* Local AI */}
+        <SettingsSectionCard
+          title="Local AI (Ollama)"
+          summary={ollamaModels.length > 0 ? `${ollamaModels.length} model${ollamaModels.length > 1 ? 's' : ''}` : serverUrl}
+          defaultOpen={false}
+        >
+          <div className="field-group">
+            <label className="field-label" htmlFor="ollama-url-input">Server URL</label>
             <input
+              id="ollama-url-input"
+              type="url"
               className="text-input"
-              placeholder="Name"
-              value={newTargetName}
-              onChange={(e) => setNewTargetName(e.target.value)}
-              style={{ flex: 1 }}
+              placeholder="http://localhost:11434"
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
             />
+          </div>
+          <div className="field-group">
+            <label className="field-label" htmlFor="ollama-key-input">
+              API Key <span className="field-label-optional">(optional)</span>
+            </label>
             <input
+              id="ollama-key-input"
+              type="password"
               className="text-input"
-              placeholder="https://..."
-              value={newTargetUrl}
-              onChange={(e) => setNewTargetUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addTarget()}
-              style={{ flex: 2 }}
+              placeholder="Leave empty if not required"
+              value={ollamaKey}
+              onChange={(e) => setOllamaKey(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
             />
+          </div>
+          <div className="ollama-fetch-row">
             <button
               className="btn btn-secondary"
-              onClick={addTarget}
-              disabled={!newTargetName.trim() || !newTargetUrl.trim()}
-              style={{ padding: '6px 8px' }}
+              onClick={handleFetchModels}
+              disabled={!serverUrl || fetchingModels}
             >
-              <IconPlus />
+              {fetchingModels
+                ? <><span className="btn-spinner" /> Connecting...</>
+                : 'Fetch Models'}
             </button>
+            {fetchError && (
+              <span className="ollama-fetch-error" role="alert">{fetchError}</span>
+            )}
           </div>
-        </div>
+        </SettingsSectionCard>
+
+        {/* Model Slots */}
+        <SettingsSectionCard title="Model Slots" summary="Classify · Simple · Complex">
+          <SlotModelSelect
+            label="Classification Model"
+            slotKey="classify"
+            config={slots.classify}
+            onChange={(v) => updateSlot('classify', v)}
+            anthropicModels={anthropicModels}
+            openaiModels={openaiModels}
+            ollamaModels={ollamaModels}
+          />
+          <SlotModelSelect
+            label="Simple & Standard Generation"
+            slotKey="generateSimple"
+            config={slots.generateSimple}
+            onChange={(v) => updateSlot('generateSimple', v)}
+            anthropicModels={anthropicModels}
+            openaiModels={openaiModels}
+            ollamaModels={ollamaModels}
+          />
+          <SlotModelSelect
+            label="Complex Generation"
+            slotKey="generateComplex"
+            config={slots.generateComplex}
+            onChange={(v) => updateSlot('generateComplex', v)}
+            anthropicModels={anthropicModels}
+            openaiModels={openaiModels}
+            ollamaModels={ollamaModels}
+          />
+        </SettingsSectionCard>
+
+        {/* Destinations */}
+        <SettingsSectionCard
+          title="Destinations"
+          summary={targets.length > 0 ? `${targets.length} target${targets.length > 1 ? 's' : ''}` : 'None'}
+          defaultOpen={false}
+        >
+          <div className="field-group">
+            {targets.map((t, i) => (
+              <div key={i} className="send-target-row">
+                <span className="send-target-name">{t.name}</span>
+                <span className="send-target-url">{t.url}</span>
+                <button
+                  className="send-target-remove"
+                  onClick={() => removeTarget(i)}
+                  aria-label={`Remove ${t.name}`}
+                >
+                  <IconX />
+                </button>
+              </div>
+            ))}
+            <div className="send-target-add">
+              <input
+                className="text-input"
+                placeholder="Name"
+                value={newTargetName}
+                onChange={(e) => setNewTargetName(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <input
+                className="text-input"
+                placeholder="https://..."
+                value={newTargetUrl}
+                onChange={(e) => setNewTargetUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addTarget()}
+                style={{ flex: 2 }}
+              />
+              <button
+                className="btn btn-secondary"
+                onClick={addTarget}
+                disabled={!newTargetName.trim() || !newTargetUrl.trim()}
+                style={{ padding: '6px 8px' }}
+              >
+                <IconPlus />
+              </button>
+            </div>
+          </div>
+        </SettingsSectionCard>
 
         <button
           className="btn btn-primary btn-full"
