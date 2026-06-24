@@ -1023,6 +1023,43 @@ button, label, span, h1, p {
 .card-body {
   background: var(--bg);
   border-top: 1px solid var(--border);
+  animation: card-body-in 0.15s ease;
+}
+
+@keyframes card-body-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.breakdown-controls {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.breakdown-toggle-all {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  transition: color var(--transition), background var(--transition);
+}
+
+.breakdown-toggle-all:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+}
+
+.breakdown-toggle-all:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .card-content {

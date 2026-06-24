@@ -1473,9 +1473,28 @@ function BreakdownTab({ result, sections = SECTIONS }) {
   }
 
   const populatedSections = sections.filter(({ key }) => result[key]?.trim());
+  const allExpanded = populatedSections.length > 0 &&
+    populatedSections.every(({ key }) => expanded[key]);
+
+  function toggleAll() {
+    const next = !allExpanded;
+    setExpanded(populatedSections.reduce((acc, { key }) => {
+      acc[key] = next;
+      return acc;
+    }, {}));
+  }
 
   return (
     <div className="breakdown-tab">
+      <div className="breakdown-controls">
+        <button
+          className="breakdown-toggle-all"
+          onClick={toggleAll}
+          aria-label={allExpanded ? 'Collapse all sections' : 'Expand all sections'}
+        >
+          {allExpanded ? 'Collapse all' : 'Expand all'}
+        </button>
+      </div>
       {populatedSections.map(({ key, label }) => (
         <SectionCard
           key={key}
