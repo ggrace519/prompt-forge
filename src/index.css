@@ -396,6 +396,24 @@ button, label, span, h1, p {
   line-height: 1.5;
 }
 
+.task-textarea {
+  min-height: 86px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.input-hint-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1px;
+}
+
+.char-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  user-select: none;
+}
+
 .text-input:hover,
 .task-textarea:hover {
   border-color: var(--border-focus);

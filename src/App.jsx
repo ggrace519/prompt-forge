@@ -864,6 +864,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
   const [aspectRatio,  setAspectRatio]  = useState('1:1');
   const [loading,      setLoading]      = useState(false);
   const [loadingStep,  setLoadingStep]  = useState('');
+  const textareaRef = useRef(null);
   const [result,       setResult]       = useState(null);
   const [tier,         setTier]         = useState(null);
   const [error,        setError]        = useState('');
@@ -922,6 +923,13 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
       promptService.resizeWindow({ width: 480, height: result ? 640 : 320 });
     }
   }, [mode, result]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }, [task]);
 
   function handleModeChange(next) {
     if (next === mode) return;
@@ -1082,14 +1090,19 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, openaiAp
           <ModeToggle mode={mode} onChange={handleModeChange} />
           <div className="input-group">
             <textarea
+              ref={textareaRef}
               className="task-textarea"
-              rows={5}
               placeholder="Describe your task... (Ctrl+Enter to generate)"
               value={task}
               onChange={(e) => setTask(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate(); }}
               spellCheck={false}
             />
+            {task.length > 0 && (
+              <div className="input-hint-row">
+                <span className="char-count">{task.length} chars</span>
+              </div>
+            )}
 
             {/* Override row toggle */}
             <div className="input-actions-row">
