@@ -883,10 +883,12 @@ app.whenReady().then(() => {
       classify:        readSlot('classify'),
       generateSimple:  readSlot('generateSimple'),
       generateComplex: readSlot('generateComplex'),
-      ollamaUrl:       store.get('ollamaUrl', 'http://localhost:11434'),
     };
   });
 
+  // NOTE: the endpoint URL is owned exclusively by save-ollama-url / get-ollama-url.
+  // This handler must NOT touch `ollamaUrl` — the renderer's slot-config object can
+  // carry a stale URL, and writing it here clobbered a URL the user had just saved.
   ipcMain.handle('save-slot-config', (_event, config) => {
     for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
       if (config[slot]) {
@@ -894,9 +896,6 @@ app.whenReady().then(() => {
         store.set(`${slot}.authMethod`, config[slot].authMethod || 'apiKey');
         store.set(`${slot}.model`, config[slot].model);
       }
-    }
-    if (config.ollamaUrl !== undefined) {
-      store.set('ollamaUrl', config.ollamaUrl);
     }
     return true;
   });
