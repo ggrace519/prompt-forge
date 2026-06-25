@@ -311,6 +311,30 @@ describe('App — Main view', () => {
     });
   });
 
+  it('Breakdown cards show a collapsed preview + word count', async () => {
+    promptService.generatePrompt.mockResolvedValue({
+      success: true,
+      data: {
+        role: 'Editor',
+        instructions: 'Tighten this paragraph for clarity',
+        assembled: 'THE FULL PROMPT TEXT',
+      },
+      tier: 'simple', generateProvider: 'anthropic', generateModel: DEFAULT_MODEL,
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), { target: { value: 'edit' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+    await waitFor(() => screen.getByText('THE FULL PROMPT TEXT'));
+
+    fireEvent.click(screen.getByRole('tab', { name: /Breakdown/i }));
+
+    // Collapsed Instructions card: a content preview + its word count (5 words).
+    expect(screen.getByText('Tighten this paragraph for clarity')).toBeInTheDocument();
+    expect(screen.getByText('5w')).toBeInTheDocument();
+  });
+
   it('New prompt clears the input and the result', async () => {
     promptService.generatePrompt.mockResolvedValue({
       success: true,
