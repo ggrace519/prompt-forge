@@ -1425,7 +1425,7 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
           onClose={() => setShowHistory(false)}
         />
       ) : (
-        <div className={`main-body${mode === 'image' || mode === 'video' ? ' media-mode' : ''}`}>
+        <div className={`main-body${mode === 'image' || mode === 'video' ? ' media-mode' : ''}${(result || loading) ? ' has-content' : ' is-empty'}`}>
           <ModeToggle mode={mode} onChange={handleModeChange} />
           <div className="input-group">
             <textarea

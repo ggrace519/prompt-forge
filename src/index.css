@@ -933,6 +933,17 @@ button, label, span, h1, p {
 }
 .main-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
+/* Empty state (no result yet): keep the mode toggle at the top, but center the
+   input block in the remaining space so the larger window reads as intentional
+   rather than stranding the input at the top with a void below. The auto block
+   margins collapse (content pins to top + scrolls) if it ever overflows. */
+.main-body.is-empty .input-group {
+  width: 100%;
+  max-width: 600px;
+  margin-inline: auto;
+  margin-block: auto;
+}
+
 /* ── Input group ────────────────────────────────────────────────────────────── */
 
 .input-group {
@@ -1971,4 +1982,17 @@ button, label, span, h1, p {
 /* In media mode, mode-toggle spans both columns */
 .main-body.media-mode > .mode-toggle {
   grid-column: 1 / -1;
+}
+
+/* Media mode while empty: collapse the two-column grid to one centered column,
+   keep the toggle at the top (row 1), and center the input in the rest (row 2). */
+.main-body.media-mode.is-empty {
+  grid-template-columns: minmax(0, 600px);
+  grid-template-rows: auto 1fr;
+  justify-content: center;
+}
+
+.main-body.media-mode.is-empty .input-group {
+  align-self: center;
+  max-width: none;
 }
