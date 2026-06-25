@@ -217,8 +217,8 @@ describe('App — Main view', () => {
       success: true,
       data: {
         role: 'Writer', instructions: 'Write clearly', context: 'Blog',
-        outputFormat: 'Markdown', reasoning: '1. Think', examples: 'Q→A',
-        reinforcement: 'Be concise', assembled: '## Role\nWriter',
+        constraints: 'No fluff', outputFormat: 'Markdown', examples: 'Q→A',
+        selfCheck: 'Verify format', assembled: '## Role\nWriter',
       },
       tier: 'simple',
       generateProvider: 'anthropic',
@@ -249,8 +249,8 @@ describe('App — Main view', () => {
       success: true,
       data: {
         role: 'r', instructions: 'i', context: 'c',
-        outputFormat: 'f', reasoning: 'rs', examples: 'ex',
-        reinforcement: 're', assembled: 'THE FULL PROMPT TEXT',
+        constraints: 'cn', outputFormat: 'f', examples: 'ex',
+        selfCheck: 'sc', assembled: 'THE FULL PROMPT TEXT',
       },
       tier: 'simple',
       generateProvider: 'anthropic',

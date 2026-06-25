@@ -8,10 +8,10 @@ const SECTIONS = [
   { key: 'role',          label: 'Role & Objective'  },
   { key: 'instructions',  label: 'Instructions'      },
   { key: 'context',       label: 'Context'           },
+  { key: 'constraints',   label: 'Constraints'       },
   { key: 'outputFormat',  label: 'Output Format'     },
-  { key: 'reasoning',     label: 'Reasoning Chain'   },
   { key: 'examples',      label: 'Examples'          },
-  { key: 'reinforcement', label: 'Reinforcement'     },
+  { key: 'selfCheck',     label: 'Self-Check'        },
 ];
 
 // Fallback Anthropic models if API fetch fails

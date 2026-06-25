@@ -47,8 +47,10 @@ The app uses a **two-call flow**: classify then generate.
 
 **Three tiers:**
 - **Simple** (4 fields): `role`, `instructions`, `outputFormat`, `assembled`
-- **Standard** (6 fields): adds `context`, `reasoning`
-- **Complex** (8 fields): adds `examples`, `reinforcement`
+- **Standard** (6 fields): adds `context`, `constraints`
+- **Complex** (8 fields): adds `examples`, `selfCheck`
+
+The generated-prompt templates follow `prompt-building-guide.md`: contract/success-criteria-first, length discipline, a `constraints` block carrying an uncertainty/abstention rule, a `selfCheck` verification pass, and **no hand-written chain-of-thought** (modern reasoning models do it internally). The old `reasoning` (CoT) and `reinforcement` fields were replaced by `constraints` and `selfCheck`.
 
 Users can override the auto-classified tier and re-generate.
 

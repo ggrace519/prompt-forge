@@ -36,46 +36,50 @@ CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose. Ju
 
 {"tier": "simple" | "standard" | "complex"}`;
 
-const SYSTEM_PROMPT_SIMPLE = `You are a world-class prompt engineer. When given a task description, you produce a focused, concise AI prompt.
+const SYSTEM_PROMPT_SIMPLE = `You are a world-class prompt engineer. Given a task description, you produce a focused AI prompt that reads like a contract: decide what "done" looks like, then state it plainly. Keep the whole prompt tight (aim ~150 words) — clarity and structure, not length.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
 Return an object with exactly these 3 string fields (all values must be strings, not nested objects or arrays):
 
 {
-  "role": "1-2 sentences defining the AI's identity and primary mission",
-  "instructions": "Clear directives covering tone, format, and key constraints",
-  "outputFormat": "What the output should look like — length, style, structure"
+  "role": "One sentence defining the AI's identity and primary mission",
+  "instructions": "The task stated unambiguously — the precise outcome wanted, plus what NOT to do. If the input could be ambiguous, tell the AI to ask before proceeding rather than guess.",
+  "outputFormat": "A concrete output contract — exact structure, length, and tone, so 'done' is unmistakable"
 }`;
 
-const SYSTEM_PROMPT_STANDARD = `You are a world-class prompt engineer. When given a task description, you produce a structured AI prompt with appropriate depth.
+const SYSTEM_PROMPT_STANDARD = `You are a world-class prompt engineer. Given a task description, you produce a structured AI prompt that reads like a contract: decide the success criteria and output format first, then write to them. Favor structure over length — keep it tight (~150-300 words) and never pad.
+
+Do NOT instruct the target model to "think step by step" or show its reasoning — modern models reason internally and explicit chain-of-thought can degrade them. Use constraints and a clear output contract instead.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
 Return an object with exactly these 5 string fields (all values must be strings, not nested objects or arrays):
 
 {
-  "role": "2-3 sentences defining the AI's identity, expertise level, and primary mission",
-  "instructions": "Numbered directives using strong action verbs. Cover tone, format, constraints, edge cases, and what NOT to do.",
-  "context": "Background information, domain knowledge, and situational context that grounds and constrains the AI's responses",
-  "outputFormat": "Explicit output contract — exact schema, field names, length, style, sections, and an example skeleton if helpful",
-  "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output"
+  "role": "1-2 sentences defining the AI's identity, expertise level, and primary mission",
+  "instructions": "The task stated unambiguously with strong action verbs — the precise outcome wanted and the key steps to achieve it",
+  "context": "Background, domain knowledge, and the inputs the task depends on. When the real use will include large input data, note that the data should be placed first and the question last.",
+  "constraints": "Boundaries and what is explicitly OUT of scope, plus an uncertainty rule — e.g. 'if unsure or the input is ambiguous, ask rather than guess; only make claims grounded in the provided material.'",
+  "outputFormat": "An explicit output contract — exact schema/structure, field names, length, tone, with a short example skeleton if helpful"
 }`;
 
-const SYSTEM_PROMPT_COMPLEX = `You are a world-class prompt engineer. When given a task description, you produce a comprehensive, structured AI prompt.
+const SYSTEM_PROMPT_COMPLEX = `You are a world-class prompt engineer. Given a task description, you produce a comprehensive, structured AI prompt that reads like a contract: define the success criteria and output format first, then write to them. Favor structure and constraints over length — depth comes from precision, not word count.
+
+Do NOT instruct the target model to "think step by step" or narrate its reasoning — modern models reason internally and explicit chain-of-thought can degrade them. Put a short verification pass in the self-check field instead.
 
 CRITICAL: Respond with ONLY raw, valid JSON — no markdown fences, no prose, no code blocks. Just the JSON object.
 
 Return an object with exactly these 7 string fields (all values must be strings, not nested objects or arrays):
 
 {
-  "role": "2-3 sentences defining the AI's identity, expertise level, and primary mission",
-  "instructions": "Numbered directives using strong action verbs. Cover tone, format, constraints, edge cases, and what NOT to do.",
-  "context": "Background information, domain knowledge, and situational context that grounds and constrains the AI's responses",
-  "outputFormat": "Explicit output contract — exact schema, field names, length, style, sections, and an example skeleton if helpful",
-  "reasoning": "Numbered chain-of-thought steps the AI should follow internally before producing output",
+  "role": "1-2 sentences defining the AI's identity, expertise level, and primary mission",
+  "instructions": "The task stated unambiguously with strong action verbs — the precise outcome, the key steps, and the edge cases to handle",
+  "context": "Background, domain knowledge, and the inputs the task depends on. For large real input data, note that data goes first and the question last.",
+  "constraints": "Boundaries and what is explicitly OUT of scope, plus an uncertainty/abstention rule — e.g. 'if unsure or the input is ambiguous, ask rather than guess; only assert claims grounded in the provided material, and mark anything else [UNCERTAIN].'",
+  "outputFormat": "An explicit output contract — exact schema, field names, length, tone, with an example skeleton",
   "examples": "1-2 concrete few-shot examples showing ideal input → output pairs, formatted clearly",
-  "reinforcement": "The 3-5 most critical rules restated concisely to lock in compliance at the end of the prompt"
+  "selfCheck": "A short verification checklist the AI must pass before finalizing (3-4 bullets), e.g. 'Before finalizing, verify: output matches the format exactly; all success criteria met (flag any misses); claims grounded in the input; nothing out-of-scope added.' This is a check on the result, NOT a reasoning script."
 }`;
 
 const SYSTEM_PROMPT_IMAGE = `You are a world-class image-prompt engineer. Given a brief task description, you produce a vivid, descriptive prompt for modern multimodal image generators (SDXL, Qwen-Image, Nano Banana, ComfyUI, Gemini, Grok).
@@ -899,10 +903,10 @@ app.whenReady().then(() => {
             ['role',          '## Role'],
             ['instructions',  '## Instructions'],
             ['context',       '## Context'],
+            ['constraints',   '## Constraints'],
             ['outputFormat',  '## Output Format'],
-            ['reasoning',     '## Reasoning Steps'],
             ['examples',      '## Examples'],
-            ['reinforcement', '## Remember'],
+            ['selfCheck',     '## Self-Check'],
           ];
           parsed.assembled = textSectionMap
             .filter(([key]) => parsed[key]?.trim())
