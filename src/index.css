@@ -514,6 +514,46 @@ button, label, span, h1, p {
   white-space: nowrap;
 }
 
+/* ── Endpoints manager ──────────────────────────────────────────────────────── */
+
+.endpoint-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.endpoint-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.endpoint-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.endpoint-row {
+  display: flex;
+  gap: 6px;
+}
+
+.endpoint-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.endpoint-model-count {
+  font-size: 11.5px;
+  color: var(--success);
+  white-space: nowrap;
+}
+
 /* ── Buttons ────────────────────────────────────────────────────────────────── */
 
 .btn {

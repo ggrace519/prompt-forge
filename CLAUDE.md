@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Windows system-tray Electron app that turns plain task descriptions into structured AI prompts. Supports four provider+auth combinations: Anthropic via API key, Anthropic via Claude Code subscription (`@anthropic-ai/claude-agent-sdk`), OpenAI via API key, and a custom user-supplied endpoint that can speak OpenAI-compatible, native-Ollama, or Anthropic-compatible wire formats. React 18 renderer, Vite build, frameless 480px-wide popup anchored to the lower-right corner of the primary display.
+Windows desktop Electron app (taskbar + optional tray) that turns plain task descriptions into structured AI prompts. Supports Anthropic via API key, Anthropic via Claude Code subscription (`@anthropic-ai/claude-agent-sdk`), OpenAI via API key, and user-defined **named endpoints** — each a URL + wire format (OpenAI-compatible, native-Ollama, or Anthropic-compatible) + optional key — that each model slot can target independently. React 18 renderer, Vite build, frameless 480px-wide window anchored to the lower-right corner of the primary display.
 
 ## Commands
 
@@ -60,15 +60,16 @@ Three independent model config slots stored in electron-store:
 | Simple & Standard | `generateSimple.*` | Generates simple/standard prompts |
 | Complex | `generateComplex.*` | Generates complex prompts |
 
-Each slot stores `{ provider, authMethod, model }`:
+Each slot stores `{ provider, authMethod, model, endpointId }`:
 
 - `provider` — `'anthropic'` | `'openai'` | `'ollama'`
 - `authMethod` — `'apiKey'` | `'subscription'` (only meaningful for `anthropic`; everything else is `'apiKey'`)
 - `model` — model id string
+- `endpointId` — for `provider: 'ollama'`, references which **named endpoint** this slot uses
 
-The `'ollama'` provider value is a **custom user-supplied endpoint** (kept named `ollama` for backward compatibility). Its wire protocol is chosen by the shared `endpointFormat` setting — `'openai'` (default) | `'ollama'` | `'anthropic'` — so the same URL can target an OpenAI-compatible, native-Ollama, or Anthropic-compatible server.
+The `'ollama'` provider value means a **named custom endpoint** (kept named `ollama` for backward compatibility). Endpoints are stored as a list `endpoints: [{ id, name, url, format }]` (`format`: `'openai'` (default) | `'ollama'` | `'anthropic'`). Each slot picks an endpoint by `endpointId` + a `model`, so **different slots can target different servers**. Per-endpoint API keys are stored separately in `endpointKeys`/`endpointKeysEnc` maps (DPAPI-encrypted at rest), keyed by endpoint id, and never returned to the renderer (only a `hasKey` flag).
 
-Shared across slots: Anthropic API key, OpenAI API key, custom-endpoint URL + API key + `endpointFormat` (the keys are DPAPI-encrypted at rest; URL and format are plaintext config).
+Shared across slots: Anthropic API key, OpenAI API key (DPAPI-encrypted). Endpoint URLs/formats are plaintext; endpoint keys are encrypted per id.
 
 ### Provider Dispatch
 
@@ -79,7 +80,7 @@ Shared across slots: Anthropic API key, OpenAI API key, custom-endpoint URL + AP
 | `anthropic` | `apiKey` | `fetch('https://api.anthropic.com/v1/messages')` |
 | `anthropic` | `subscription` | Lazy `await import('@anthropic-ai/claude-agent-sdk')`, `query()` with `settingSources: []`, `permissionMode: 'bypassPermissions'`, `allowedTools: []`, `maxTurns: 1`. Reads OAuth creds from the local Claude Code CLI install. |
 | `openai` | `apiKey` | `fetch('https://api.openai.com/v1/chat/completions')` with bearer auth |
-| `ollama` (custom endpoint) | `apiKey` | Routes by `endpointFormat`: `'openai'` → `fetch('${url}/v1/chat/completions')` (bearer); `'ollama'` → `fetch('${url}/api/chat')` (bearer, native response shape); `'anthropic'` → `fetch('${url}/v1/messages')` (`x-api-key` + `anthropic-version`) |
+| `ollama` (named endpoint) | `apiKey` | Resolves the slot's endpoint (by `endpointId`) → url + format + key, then routes by `format`: `'openai'` → `fetch('${url}/v1/chat/completions')` (bearer); `'ollama'` → `fetch('${url}/api/chat')` (bearer, native response shape); `'anthropic'` → `fetch('${url}/v1/messages')` (`x-api-key` + `anthropic-version`) |
 
 The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge. First subscription call has ~1-2s cold-import overhead.
 
@@ -96,10 +97,11 @@ The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge
 - **Tests** live in `tests/` (not `__tests__`), use Vitest + jsdom + @testing-library/react. Setup in `tests/setup.js`.
 - **No TypeScript.** Plain JS with JSDoc annotations where helpful.
 - **Default model:** `claude-haiku-4-5-20251001` (Anthropic), `gpt-4o-mini` (OpenAI).
-- **Config migration:** `migrateConfig()` runs on every launch with two flags:
+- **Config migration:** `migrateConfig()` runs on every launch with three flags:
   - `configMigrated` — converts old single-provider config to three slots (legacy upgrade).
   - `configMigratedV2` — backfills `authMethod: 'apiKey'` onto every slot that predates the field.
-- **Slot encoding for `<select>` options:** Encoded form is `<provider>:<authMethod>:<model>`. Decoder splits on the first two `:` only, since model names may contain `:` (e.g., Ollama's `llama3:8b`). See `encodeSlot` / `decodeSlot` in `App.jsx`.
+  - `configMigratedV3` — converts the old shared custom endpoint (`ollamaUrl`/`endpointFormat`/`ollamaApiKey`) into the first entry of the named `endpoints` list and stamps each `ollama` slot with its `endpointId`.
+- **Slot encoding for `<select>` options:** For most providers the form is `<provider>:<authMethod>:<model>`; for `ollama` the middle field carries the **endpoint id** instead: `ollama:<endpointId>:<model>`. Decoder splits on the first two `:` only, since model names may contain `:` (e.g., `llama3:8b`). See `encodeSlot` / `decodeSlot` in `App.jsx`.
 
 ### IPC Channels
 
@@ -108,11 +110,9 @@ The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge
 | `generate-prompt` | invoke | Two-call classify+generate flow. Accepts `{task, tier?}` |
 | `save-api-key` / `get-api-key` | invoke | Shared Anthropic API key (encrypted) |
 | `save-openai-api-key` / `get-openai-api-key` | invoke | Shared OpenAI API key (encrypted) |
-| `get-slot-config` / `save-slot-config` | invoke | Three-slot `{provider, authMethod, model}` configuration |
-| `save-ollama-url` / `get-ollama-url` | invoke | Shared custom-endpoint URL |
-| `save-ollama-api-key` / `get-ollama-api-key` | invoke | Shared custom-endpoint API key (encrypted) |
-| `save-endpoint-format` / `get-endpoint-format` | invoke | Custom-endpoint wire format (`'openai'` \| `'ollama'` \| `'anthropic'`, default `'openai'`) |
-| `fetch-ollama-models` | invoke | List models from the custom endpoint. Route depends on format: `/api/tags` (ollama) or `/v1/models` (openai/anthropic) |
+| `get-slot-config` / `save-slot-config` | invoke | Three-slot `{provider, authMethod, model, endpointId}` configuration |
+| `get-endpoints` / `save-endpoints` | invoke | Named endpoints `[{id,name,url,format}]`. `get` adds a `hasKey` flag; `save` takes `{endpoints, keyUpdates}` (id→key map, '' clears) and prunes keys for removed endpoints. Keys are never returned. |
+| `fetch-ollama-models` | invoke | List models from an endpoint `{url, apiKey, format, endpointId}`. Falls back to the stored key when `apiKey` is blank. Route depends on format: `/api/tags` (ollama) or `/v1/models` (openai/anthropic) |
 | `fetch-anthropic-models` | invoke | List available Anthropic models (uses shared API key) |
 | `fetch-openai-models` | invoke | List available OpenAI models (uses shared OpenAI key, filters to `gpt-*` / `o*` / `chatgpt-*`) |
 | `check-claude-cli-status` | invoke | Probe local `claude --version` via `child_process.exec` (3s timeout). Returns `{installed, version?}` for the subscription auth indicator. |

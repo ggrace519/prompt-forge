@@ -81,24 +81,24 @@ export async function saveSlotConfig(config) {
   return getIPC().saveSlotConfig(config);
 }
 
-// ── Shared Ollama server config ─────────────────────────────────────────────
+// ── Named custom endpoints ──────────────────────────────────────────────────
 
-export async function saveOllamaUrl(url) { return getIPC().saveOllamaUrl(url); }
-export async function getOllamaUrl()     { return getIPC().getOllamaUrl(); }
-
-export async function saveOllamaApiKey(key) { return getIPC().saveOllamaApiKey(key); }
-export async function getOllamaApiKey()     { return getIPC().getOllamaApiKey(); }
-
-export async function fetchOllamaModels(url, apiKey, format) {
-  return getIPC().fetchOllamaModels(url, apiKey, format);
+/** @returns {Promise<Array<{id,name,url,format,hasKey}>>} */
+export async function getEndpoints() {
+  return getIPC().getEndpoints();
 }
 
-export async function saveEndpointFormat(format) {
-  return getIPC().saveEndpointFormat(format);
+/**
+ * Persist endpoint metadata + any typed key updates.
+ * @param {Array<{id,name,url,format}>} endpoints
+ * @param {Object<string,string>} [keyUpdates]  id → new key ('' clears it)
+ */
+export async function saveEndpoints(endpoints, keyUpdates) {
+  return getIPC().saveEndpoints(endpoints, keyUpdates);
 }
 
-export async function getEndpointFormat() {
-  return getIPC().getEndpointFormat();
+export async function fetchOllamaModels(url, apiKey, format, endpointId) {
+  return getIPC().fetchOllamaModels(url, apiKey, format, endpointId);
 }
 
 export async function fetchAnthropicModels() {

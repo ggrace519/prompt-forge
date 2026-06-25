@@ -45,25 +45,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveSlotConfig: (config) =>
     ipcRenderer.invoke('save-slot-config', config),
 
-  // Shared Ollama server config
-  saveOllamaUrl: (url) =>
-    ipcRenderer.invoke('save-ollama-url', url),
-  getOllamaUrl: () =>
-    ipcRenderer.invoke('get-ollama-url'),
-  saveOllamaApiKey: (key) =>
-    ipcRenderer.invoke('save-ollama-api-key', key),
-  getOllamaApiKey: () =>
-    ipcRenderer.invoke('get-ollama-api-key'),
-  fetchOllamaModels: (url, apiKey, format) =>
-    ipcRenderer.invoke('fetch-ollama-models', { url, apiKey, format }),
+  // Named custom endpoints
+  getEndpoints: () =>
+    ipcRenderer.invoke('get-endpoints'),
+  saveEndpoints: (endpoints, keyUpdates) =>
+    ipcRenderer.invoke('save-endpoints', { endpoints, keyUpdates }),
+  fetchOllamaModels: (url, apiKey, format, endpointId) =>
+    ipcRenderer.invoke('fetch-ollama-models', { url, apiKey, format, endpointId }),
   fetchAnthropicModels: () =>
     ipcRenderer.invoke('fetch-anthropic-models'),
-
-  // Custom-endpoint wire format
-  saveEndpointFormat: (format) =>
-    ipcRenderer.invoke('save-endpoint-format', format),
-  getEndpointFormat: () =>
-    ipcRenderer.invoke('get-endpoint-format'),
 
   // Send targets
   getSendTargets: () =>

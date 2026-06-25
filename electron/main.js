@@ -217,6 +217,92 @@ function migrateConfig() {
     }
     store.set('configMigratedV2', true);
   }
+
+  // v3 — shared custom endpoint → named-endpoints list. Each model slot now
+  // references its own endpoint by id, so different slots can target different
+  // servers. The previous single shared endpoint becomes the first named entry.
+  if (!store.get('configMigratedV3')) {
+    if (!store.get('endpoints')) {
+      const id = 'ep-legacy';
+      store.set('endpoints', [{
+        id,
+        name:   'Custom Endpoint',
+        url:    store.get('ollamaUrl', 'http://localhost:11434'),
+        format: store.get('endpointFormat', 'openai'),
+      }]);
+      const sharedKey = readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted');
+      if (sharedKey) writeEndpointKey(id, sharedKey);
+      for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
+        if (store.get(`${slot}.provider`) === 'ollama' && !store.get(`${slot}.endpointId`)) {
+          store.set(`${slot}.endpointId`, id);
+        }
+      }
+    }
+    store.set('configMigratedV3', true);
+  }
+}
+
+// ── Key storage (DPAPI-encrypted at rest when available) ──────────────────────
+
+/** Read+decrypt a key stored as either DPAPI ciphertext (base64) or plaintext. */
+function readEncryptedKey(valueKey, flagKey) {
+  const stored      = store.get(valueKey, '');
+  const isEncrypted = store.get(flagKey, false);
+  if (!stored) return '';
+  if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+    try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+  }
+  return stored;
+}
+
+/** Persist a key, encrypting via DPAPI when available. */
+function writeEncryptedKey(valueKey, flagKey, key) {
+  if (!key) {
+    store.delete(valueKey);
+    store.delete(flagKey);
+    return;
+  }
+  if (safeStorage.isEncryptionAvailable()) {
+    store.set(valueKey, safeStorage.encryptString(key).toString('base64'));
+    store.set(flagKey, true);
+  } else {
+    store.set(valueKey, key);
+    store.set(flagKey, false);
+  }
+}
+
+// Per-endpoint API keys live in two parallel maps keyed by endpoint id:
+//   endpointKeys     : { [id]: base64-or-plaintext }
+//   endpointKeysEnc  : { [id]: boolean }   (true → the value is DPAPI ciphertext)
+
+function readEndpointKey(id) {
+  if (!id) return '';
+  const keys = store.get('endpointKeys', {});
+  const enc  = store.get('endpointKeysEnc', {});
+  const stored = keys[id];
+  if (!stored) return '';
+  if (enc[id] && safeStorage.isEncryptionAvailable()) {
+    try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
+  }
+  return stored;
+}
+
+function writeEndpointKey(id, key) {
+  if (!id) return;
+  const keys = store.get('endpointKeys', {});
+  const enc  = store.get('endpointKeysEnc', {});
+  if (!key) {
+    delete keys[id];
+    delete enc[id];
+  } else if (safeStorage.isEncryptionAvailable()) {
+    keys[id] = safeStorage.encryptString(key).toString('base64');
+    enc[id]  = true;
+  } else {
+    keys[id] = key;
+    enc[id]  = false;
+  }
+  store.set('endpointKeys', keys);
+  store.set('endpointKeysEnc', enc);
 }
 
 // ── Window ────────────────────────────────────────────────────────────────────
@@ -527,45 +613,28 @@ app.whenReady().then(() => {
     return textBlock.text;
   }
 
-  /** Read+decrypt a key stored as either DPAPI ciphertext (base64) or plaintext. */
-  function readEncryptedKey(valueKey, flagKey) {
-    const stored      = store.get(valueKey, '');
-    const isEncrypted = store.get(flagKey, false);
-    if (!stored) return '';
-    if (isEncrypted && safeStorage.isEncryptionAvailable()) {
-      try { return safeStorage.decryptString(Buffer.from(stored, 'base64')); } catch { return ''; }
-    }
-    return stored;
-  }
-
-  /** Persist a key, encrypting via DPAPI when available. */
-  function writeEncryptedKey(valueKey, flagKey, key) {
-    if (!key) {
-      store.delete(valueKey);
-      store.delete(flagKey);
-      return;
-    }
-    if (safeStorage.isEncryptionAvailable()) {
-      store.set(valueKey, safeStorage.encryptString(key).toString('base64'));
-      store.set(flagKey, true);
-    } else {
-      store.set(valueKey, key);
-      store.set(flagKey, false);
-    }
-  }
-
-  /** Resolve credentials for a given slot. */
+  /** Resolve credentials for a given slot, including its per-slot endpoint. */
   function getSlotCredentials(slot) {
-    return {
-      provider:     store.get(`${slot}.provider`, 'anthropic'),
+    const provider = store.get(`${slot}.provider`, 'anthropic');
+    const creds = {
+      provider,
       authMethod:   store.get(`${slot}.authMethod`, 'apiKey'),
       model:        store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL),
       apiKey:       readEncryptedKey('apiKey', 'apiKeyEncrypted'),
       openaiApiKey: readEncryptedKey('openaiApiKey', 'openaiApiKeyEncrypted'),
-      ollamaUrl:    store.get('ollamaUrl', 'http://localhost:11434'),
-      ollamaApiKey: readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted'),
-      endpointFormat: store.get('endpointFormat', 'openai'),
     };
+
+    if (provider === 'ollama') {
+      const endpointId = store.get(`${slot}.endpointId`, '');
+      const endpoints  = store.get('endpoints', []);
+      const ep = endpoints.find((e) => e.id === endpointId) || endpoints[0] || {};
+      creds.endpointId     = ep.id || '';
+      creds.ollamaUrl      = ep.url || 'http://localhost:11434';
+      creds.endpointFormat = ep.format || 'openai';
+      creds.ollamaApiKey   = readEndpointKey(ep.id);
+    }
+
+    return creds;
   }
 
   // ── IPC Handlers ───────────────────────────────────────────────────────────
@@ -731,10 +800,13 @@ app.whenReady().then(() => {
   // Fetch available models from a custom endpoint. The listing route depends on
   // the wire format: native Ollama lists at /api/tags; OpenAI- and Anthropic-
   // compatible endpoints list at /v1/models ({ data: [{ id }] }).
-  ipcMain.handle('fetch-ollama-models', async (_event, { url, apiKey, format }) => {
+  ipcMain.handle('fetch-ollama-models', async (_event, { url, apiKey, format, endpointId }) => {
     try {
       const baseUrl = (url || 'http://localhost:11434').replace(/\/+$/, '');
       const fmt = format || 'openai';
+      // Fall back to the stored key for this endpoint when the user hasn't typed
+      // a new one this session (the key field is blank for already-saved keys).
+      if (!apiKey && endpointId) apiKey = readEndpointKey(endpointId);
 
       if (fmt === 'ollama') {
         const headers = {};
@@ -850,25 +922,6 @@ app.whenReady().then(() => {
     return true;
   });
 
-  // Ollama configuration
-  ipcMain.handle('save-ollama-url', (_event, url) => { store.set('ollamaUrl', url); return true; });
-  ipcMain.handle('get-ollama-url',  () => store.get('ollamaUrl', 'http://localhost:11434'));
-
-  ipcMain.handle('save-ollama-api-key', (_event, key) => {
-    writeEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted', key);
-    return true;
-  });
-  ipcMain.handle('get-ollama-api-key', () => {
-    return readEncryptedKey('ollamaApiKey', 'ollamaApiKeyEncrypted');
-  });
-
-  // Custom-endpoint wire format: 'openai' | 'ollama' | 'anthropic'
-  ipcMain.handle('save-endpoint-format', (_event, format) => {
-    store.set('endpointFormat', format);
-    return true;
-  });
-  ipcMain.handle('get-endpoint-format', () => store.get('endpointFormat', 'openai'));
-
   // ── Slot config ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('get-slot-config', () => {
@@ -877,6 +930,7 @@ app.whenReady().then(() => {
         provider:   store.get(`${slot}.provider`, 'anthropic'),
         authMethod: store.get(`${slot}.authMethod`, 'apiKey'),
         model:      store.get(`${slot}.model`, DEFAULT_ANTHROPIC_MODEL),
+        endpointId: store.get(`${slot}.endpointId`, ''),
       };
     }
     return {
@@ -886,17 +940,52 @@ app.whenReady().then(() => {
     };
   });
 
-  // NOTE: the endpoint URL is owned exclusively by save-ollama-url / get-ollama-url.
-  // This handler must NOT touch `ollamaUrl` — the renderer's slot-config object can
-  // carry a stale URL, and writing it here clobbered a URL the user had just saved.
   ipcMain.handle('save-slot-config', (_event, config) => {
     for (const slot of ['classify', 'generateSimple', 'generateComplex']) {
       if (config[slot]) {
         store.set(`${slot}.provider`, config[slot].provider);
         store.set(`${slot}.authMethod`, config[slot].authMethod || 'apiKey');
         store.set(`${slot}.model`, config[slot].model);
+        store.set(`${slot}.endpointId`, config[slot].endpointId || '');
       }
     }
+    return true;
+  });
+
+  // ── Named endpoints ─────────────────────────────────────────────────────────
+  // Each endpoint is { id, name, url, format }. Keys are stored separately
+  // (DPAPI-encrypted) and never returned to the renderer — only a hasKey flag.
+
+  ipcMain.handle('get-endpoints', () => {
+    const endpoints = store.get('endpoints', []);
+    return endpoints.map((e) => ({ ...e, hasKey: !!readEndpointKey(e.id) }));
+  });
+
+  // Persist endpoint metadata. `keyUpdates` is an optional { [id]: key } map of
+  // keys the user typed this session; '' clears a key, undefined leaves it. Keys
+  // for endpoints no longer in the list are pruned.
+  ipcMain.handle('save-endpoints', (_event, { endpoints, keyUpdates }) => {
+    const list = (endpoints || []).map((e) => ({
+      id: e.id, name: e.name || '', url: e.url || '', format: e.format || 'openai',
+    }));
+    store.set('endpoints', list);
+
+    if (keyUpdates && typeof keyUpdates === 'object') {
+      for (const [id, key] of Object.entries(keyUpdates)) {
+        if (key !== undefined) writeEndpointKey(id, key);
+      }
+    }
+
+    // Prune keys for removed endpoints.
+    const liveIds = new Set(list.map((e) => e.id));
+    const keys = store.get('endpointKeys', {});
+    const enc  = store.get('endpointKeysEnc', {});
+    let pruned = false;
+    for (const id of Object.keys(keys)) {
+      if (!liveIds.has(id)) { delete keys[id]; delete enc[id]; pruned = true; }
+    }
+    if (pruned) { store.set('endpointKeys', keys); store.set('endpointKeysEnc', enc); }
+
     return true;
   });
 

@@ -292,31 +292,32 @@ describe('resizeWindow', () => {
   });
 });
 
-// ── Custom endpoint format ────────────────────────────────────────────────────
+// ── Named endpoints ───────────────────────────────────────────────────────────
 
-describe('custom endpoint format', () => {
+describe('named endpoints', () => {
   beforeEach(() => {
     mockIPC.fetchOllamaModels = vi.fn();
-    mockIPC.saveEndpointFormat = vi.fn();
-    mockIPC.getEndpointFormat = vi.fn();
+    mockIPC.getEndpoints = vi.fn();
+    mockIPC.saveEndpoints = vi.fn();
   });
 
-  it('threads the wire format through to fetchOllamaModels', async () => {
+  it('threads url, key, format, and endpoint id through to fetchOllamaModels', async () => {
     mockIPC.fetchOllamaModels.mockResolvedValue({ success: true, models: ['llama3'] });
-    await promptService.fetchOllamaModels('http://host:1234', 'key-abc', 'anthropic');
-    expect(mockIPC.fetchOllamaModels).toHaveBeenCalledWith('http://host:1234', 'key-abc', 'anthropic');
+    await promptService.fetchOllamaModels('http://host:1234', 'key-abc', 'anthropic', 'ep-1');
+    expect(mockIPC.fetchOllamaModels).toHaveBeenCalledWith('http://host:1234', 'key-abc', 'anthropic', 'ep-1');
   });
 
-  it('persists the selected format', async () => {
-    mockIPC.saveEndpointFormat.mockResolvedValue(true);
-    await promptService.saveEndpointFormat('ollama');
-    expect(mockIPC.saveEndpointFormat).toHaveBeenCalledWith('ollama');
+  it('reads the endpoint list', async () => {
+    const eps = [{ id: 'ep-1', name: 'Home', url: 'http://h', format: 'openai', hasKey: true }];
+    mockIPC.getEndpoints.mockResolvedValue(eps);
+    expect(await promptService.getEndpoints()).toEqual(eps);
   });
 
-  it('reads the saved format', async () => {
-    mockIPC.getEndpointFormat.mockResolvedValue('anthropic');
-    const fmt = await promptService.getEndpointFormat();
-    expect(fmt).toBe('anthropic');
+  it('persists endpoint metadata + key updates', async () => {
+    mockIPC.saveEndpoints.mockResolvedValue(true);
+    const meta = [{ id: 'ep-1', name: 'Home', url: 'http://h', format: 'openai' }];
+    await promptService.saveEndpoints(meta, { 'ep-1': 'sk-new' });
+    expect(mockIPC.saveEndpoints).toHaveBeenCalledWith(meta, { 'ep-1': 'sk-new' });
   });
 });
 

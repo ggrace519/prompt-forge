@@ -24,16 +24,13 @@ const FALLBACK_OPENAI_MODELS = [
   'gpt-4o-mini',
 ];
 
-// Wire formats a custom endpoint can speak. The encoded slot provider stays
-// 'ollama' for backward compatibility; the format is a shared endpoint setting.
+// Wire formats a named endpoint can speak. The encoded slot provider stays
+// 'ollama' for backward compatibility; the format is a per-endpoint setting.
 const ENDPOINT_FORMATS = [
   { value: 'openai',    label: 'OpenAI-compatible' },
   { value: 'ollama',    label: 'Ollama (native)' },
   { value: 'anthropic', label: 'Anthropic / Claude' },
 ];
-
-const endpointFormatLabel = (v) =>
-  (ENDPOINT_FORMATS.find((f) => f.value === v) || ENDPOINT_FORMATS[0]).label;
 
 // ── Slot encoding helpers ─────────────────────────────────────────────────────
 // A slot is `{ provider, authMethod, model }` where authMethod distinguishes
@@ -41,8 +38,13 @@ const endpointFormatLabel = (v) =>
 // the <select> option value: "<provider>:<authMethod>:<model>". Splitting on
 // the first two `:` only — model names may legitimately contain `:` (e.g.
 // `llama3:8b` from Ollama).
+// For custom endpoints the middle field carries the endpoint id instead of an
+// authMethod: "ollama:<endpointId>:<model>". Other providers keep authMethod.
 function encodeSlot(config) {
   if (!config) return '';
+  if (config.provider === 'ollama') {
+    return `ollama:${config.endpointId || ''}:${config.model || ''}`;
+  }
   const auth = config.authMethod || 'apiKey';
   return `${config.provider}:${auth}:${config.model || ''}`;
 }
@@ -50,11 +52,13 @@ function encodeSlot(config) {
 function decodeSlot(encoded) {
   const first = encoded.indexOf(':');
   const second = encoded.indexOf(':', first + 1);
-  return {
-    provider:   encoded.slice(0, first),
-    authMethod: encoded.slice(first + 1, second),
-    model:      encoded.slice(second + 1),
-  };
+  const provider = encoded.slice(0, first);
+  const middle   = encoded.slice(first + 1, second);
+  const model    = encoded.slice(second + 1);
+  if (provider === 'ollama') {
+    return { provider: 'ollama', authMethod: 'apiKey', endpointId: middle, model };
+  }
+  return { provider, authMethod: middle, model };
 }
 
 function defaultSlot(provider = 'anthropic', model = 'claude-haiku-4-5-20251001') {
@@ -362,9 +366,7 @@ export default function App() {
   const [apiKey,        setApiKey]        = useState('');
   const [openaiApiKey,  setOpenaiApiKey]  = useState('');
   const [slotConfig,    setSlotConfig]    = useState(null);
-  const [ollamaUrl,     setOllamaUrl]     = useState('http://localhost:11434');
-  const [ollamaApiKey,  setOllamaApiKey]  = useState('');
-  const [endpointFormat, setEndpointFormat] = useState('openai');
+  const [endpoints,     setEndpoints]     = useState([]);
   const [sendTargets,   setSendTargets]   = useState([]);
   const [history,       setHistory]       = useState([]);
   const [theme,         setTheme]         = useState('dark');
@@ -374,13 +376,11 @@ export default function App() {
       promptService.getApiKey(),
       promptService.getOpenaiApiKey(),
       promptService.getSlotConfig(),
-      promptService.getOllamaUrl(),
-      promptService.getOllamaApiKey(),
-      promptService.getEndpointFormat(),
+      promptService.getEndpoints(),
       promptService.getSendTargets(),
       promptService.getHistory(),
       promptService.getTheme(),
-    ]).then(([key, openaiKey, slots, oUrl, oKey, eFormat, targets, hist, savedTheme]) => {
+    ]).then(([key, openaiKey, slots, eps, targets, hist, savedTheme]) => {
       setApiKey(key || '');
       setOpenaiApiKey(openaiKey || '');
       setSlotConfig(slots || {
@@ -388,9 +388,7 @@ export default function App() {
         generateSimple:  defaultSlot(),
         generateComplex: defaultSlot('anthropic', 'claude-sonnet-4-5'),
       });
-      setOllamaUrl(oUrl || 'http://localhost:11434');
-      setOllamaApiKey(oKey || '');
-      setEndpointFormat(eFormat || 'openai');
+      setEndpoints(eps || []);
       setSendTargets(targets || []);
       setHistory(hist || []);
       setTheme(savedTheme || 'dark');
@@ -404,9 +402,7 @@ export default function App() {
     setApiKey(config.apiKey);
     setOpenaiApiKey(config.openaiApiKey);
     setSlotConfig(config.slotConfig);
-    setOllamaUrl(config.ollamaUrl);
-    setOllamaApiKey(config.ollamaApiKey);
-    setEndpointFormat(config.endpointFormat);
+    setEndpoints(config.endpoints);
     setSendTargets(config.sendTargets);
     setView('main');
   }, []);
@@ -434,9 +430,7 @@ export default function App() {
         apiKey={apiKey}
         openaiApiKey={openaiApiKey}
         slotConfig={slotConfig}
-        ollamaUrl={ollamaUrl}
-        ollamaApiKey={ollamaApiKey}
-        endpointFormat={endpointFormat}
+        endpoints={endpoints}
         sendTargets={sendTargets}
         onSave={handleSettingsSaved}
         onBack={canGoBack ? () => setView('main') : null}
@@ -450,9 +444,7 @@ export default function App() {
     <MainView
       slotConfig={slotConfig}
       setSlotConfig={setSlotConfig}
-      ollamaUrl={ollamaUrl}
-      ollamaApiKey={ollamaApiKey}
-      endpointFormat={endpointFormat}
+      endpoints={endpoints}
       openaiApiKey={openaiApiKey}
       sendTargets={sendTargets}
       history={history}
@@ -490,28 +482,48 @@ function SettingsSectionCard({ title, summary, children, defaultOpen = true }) {
 
 // ── SettingsView ──────────────────────────────────────────────────────────────
 
-/** Unified model dropdown — Anthropic (API/subscription) + OpenAI + Ollama. */
+/** Keep the currently-selected model visible even if it's not in the fetched list. */
+function withCurrent(list, show, model) {
+  return show && model && !list.includes(model) ? [model, ...list] : list;
+}
+
+/** One <optgroup> per named endpoint, listing that endpoint's models. */
+function EndpointOptgroups({ endpoints, endpointModels, config }) {
+  if (!endpoints || endpoints.length === 0) {
+    return (
+      <optgroup label="Custom Endpoint">
+        <option disabled value="">Add an endpoint in Settings</option>
+      </optgroup>
+    );
+  }
+  return endpoints.map((ep) => {
+    const isHere = config?.provider === 'ollama' && config.endpointId === ep.id;
+    const list = withCurrent(endpointModels[ep.id] || [], isHere, config?.model);
+    return (
+      <optgroup key={ep.id} label={ep.name || 'Endpoint'}>
+        {list.length > 0
+          ? list.map((m) => (
+              <option key={`${ep.id}-${m}`} value={`ollama:${ep.id}:${m}`}>{m}</option>
+            ))
+          : <option disabled value="">Fetch models first</option>
+        }
+      </optgroup>
+    );
+  });
+}
+
+/** Unified model dropdown — Anthropic (API/subscription) + OpenAI + each endpoint. */
 function SlotModelSelect({
   label, slotKey, config, onChange,
-  anthropicModels, openaiModels, ollamaModels,
+  anthropicModels, openaiModels, endpoints, endpointModels,
 }) {
   const currentValue = encodeSlot(config);
+  const sameAuth = (auth) => config?.provider !== 'ollama' &&
+    config?.provider && (config.authMethod || 'apiKey') === auth;
 
-  // Ensure the currently-selected model is present in its optgroup so the
-  // <select> doesn't silently flip to the first option when the model is
-  // missing from the fetched list.
-  const includeCurrent = (provider, authMethod, list) => {
-    const isHere =
-      config?.provider === provider &&
-      (config.authMethod || 'apiKey') === authMethod &&
-      config.model && !list.includes(config.model);
-    return isHere ? [config.model, ...list] : list;
-  };
-
-  const anthApiList = includeCurrent('anthropic', 'apiKey',       anthropicModels);
-  const anthSubList = includeCurrent('anthropic', 'subscription', anthropicModels);
-  const openaiList  = includeCurrent('openai',    'apiKey',       openaiModels);
-  const ollamaList  = includeCurrent('ollama',    'apiKey',       ollamaModels);
+  const anthApiList = withCurrent(anthropicModels, config?.provider === 'anthropic' && sameAuth('apiKey'),       config?.model);
+  const anthSubList = withCurrent(anthropicModels, config?.provider === 'anthropic' && sameAuth('subscription'), config?.model);
+  const openaiList  = withCurrent(openaiModels,    config?.provider === 'openai',                                config?.model);
 
   return (
     <div className="field-group">
@@ -540,14 +552,7 @@ function SlotModelSelect({
             : <option disabled value="">Add OpenAI key to enable</option>
           }
         </optgroup>
-        <optgroup label="Custom Endpoint">
-          {ollamaList.length > 0
-            ? ollamaList.map((m) => (
-                <option key={`l-${m}`} value={`ollama:apiKey:${m}`}>{m}</option>
-              ))
-            : <option disabled value="">Fetch models first</option>
-          }
-        </optgroup>
+        <EndpointOptgroups endpoints={endpoints} endpointModels={endpointModels} config={config} />
       </select>
     </div>
   );
@@ -556,23 +561,22 @@ function SlotModelSelect({
 function SettingsView({
   apiKey: currentApiKey, openaiApiKey: currentOpenaiApiKey,
   slotConfig: currentSlotConfig,
-  ollamaUrl: currentOllamaUrl, ollamaApiKey: currentOllamaApiKey,
-  endpointFormat: currentEndpointFormat,
+  endpoints: currentEndpoints,
   sendTargets: currentSendTargets,
   onSave, onBack,
   theme, onToggleTheme,
 }) {
   const [key,             setKey]             = useState('');
   const [openaiKey,       setOpenaiKey]       = useState('');
-  const [serverUrl,       setServerUrl]       = useState(currentOllamaUrl || 'http://localhost:11434');
-  const [ollamaKey,       setOllamaKey]       = useState('');
-  const [format,          setFormat]          = useState(currentEndpointFormat || 'openai');
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [openaiModels,    setOpenaiModels]    = useState(FALLBACK_OPENAI_MODELS);
-  const [ollamaModels,    setOllamaModels]    = useState([]);
-  const [fetchingModels,  setFetchingModels]  = useState(false);
-  const [fetchError,      setFetchError]      = useState('');
   const [cliStatus,       setCliStatus]       = useState(null); // null=loading, {installed, version?}
+
+  // Named endpoints (editable copy), typed keys, fetched models, per-endpoint fetch state.
+  const [endpoints,        setEndpoints]        = useState(() => (currentEndpoints || []).map((e) => ({ ...e })));
+  const [endpointKeyInputs, setEndpointKeyInputs] = useState({}); // id → typed key
+  const [endpointModels,   setEndpointModels]   = useState({});   // id → [models]
+  const [endpointFetch,    setEndpointFetch]    = useState({});   // id → { loading, error }
 
   const [slots, setSlots] = useState(currentSlotConfig || {
     classify:        defaultSlot('anthropic', FALLBACK_ANTHROPIC_MODELS[1]),
@@ -612,8 +616,9 @@ function SettingsView({
       .then(setCliStatus)
       .catch(() => setCliStatus({ installed: false }));
 
-    if (serverUrl) {
-      handleFetchModels();
+    // Fetch models for every already-configured endpoint (uses its stored key).
+    for (const ep of endpoints) {
+      if (ep.url) fetchEndpointModels(ep);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -624,23 +629,47 @@ function SettingsView({
     promptService.saveCloseToTray(next);   // apply immediately
   }
 
-  async function handleFetchModels() {
-    setFetchingModels(true);
-    setFetchError('');
-    try {
-      const result = await promptService.fetchOllamaModels(serverUrl, ollamaKey, format);
-      if (result.success) {
-        setOllamaModels(result.models);
-        if (result.models.length === 0) {
-          setFetchError('Endpoint responded but returned 0 models');
+  function addEndpoint() {
+    const id = (crypto.randomUUID && crypto.randomUUID()) || `ep-${Date.now()}`;
+    setEndpoints((prev) => [...prev, { id, name: '', url: '', format: 'openai', hasKey: false }]);
+  }
+
+  function updateEndpoint(id, patch) {
+    setEndpoints((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  }
+
+  function removeEndpoint(id) {
+    setEndpoints((prev) => prev.filter((e) => e.id !== id));
+    setEndpointKeyInputs((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    setEndpointModels((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    // Reset any slot that pointed at this endpoint back to a safe Anthropic default.
+    setSlots((prev) => {
+      const next = { ...prev };
+      for (const k of ['classify', 'generateSimple', 'generateComplex']) {
+        if (next[k]?.provider === 'ollama' && next[k]?.endpointId === id) {
+          next[k] = defaultSlot('anthropic', FALLBACK_ANTHROPIC_MODELS[1]);
         }
+      }
+      return next;
+    });
+  }
+
+  async function fetchEndpointModels(ep) {
+    setEndpointFetch((prev) => ({ ...prev, [ep.id]: { loading: true, error: '' } }));
+    try {
+      const typedKey = endpointKeyInputs[ep.id] || '';
+      const result = await promptService.fetchOllamaModels(ep.url, typedKey, ep.format, ep.id);
+      if (result.success) {
+        setEndpointModels((prev) => ({ ...prev, [ep.id]: result.models }));
+        setEndpointFetch((prev) => ({
+          ...prev,
+          [ep.id]: { loading: false, error: result.models.length === 0 ? 'Responded with 0 models' : '' },
+        }));
       } else {
-        setFetchError(result.error || 'Could not connect to the endpoint');
+        setEndpointFetch((prev) => ({ ...prev, [ep.id]: { loading: false, error: result.error || 'Could not connect' } }));
       }
     } catch (err) {
-      setFetchError('IPC error: ' + (err.message || String(err)));
-    } finally {
-      setFetchingModels(false);
+      setEndpointFetch((prev) => ({ ...prev, [ep.id]: { loading: false, error: 'IPC error: ' + (err.message || String(err)) } }));
     }
   }
 
@@ -668,32 +697,41 @@ function SettingsView({
       const trimmedOpenaiKey = openaiKey.trim();
       if (trimmedKey)       await promptService.saveApiKey(trimmedKey);
       if (trimmedOpenaiKey) await promptService.saveOpenaiApiKey(trimmedOpenaiKey);
-      await promptService.saveOllamaUrl(serverUrl);
-      await promptService.saveOllamaApiKey(ollamaKey);
-      await promptService.saveEndpointFormat(format);
+
+      // Only send keys the user actually typed this session ('' clears one).
+      const keyUpdates = {};
+      for (const [id, val] of Object.entries(endpointKeyInputs)) {
+        if (val !== undefined && val !== '') keyUpdates[id] = val;
+      }
+      const epMeta = endpoints.map(({ id, name, url, format }) => ({ id, name, url, format }));
+      await promptService.saveEndpoints(epMeta, keyUpdates);
       await promptService.saveSlotConfig(slots);
       await promptService.saveSendTargets(targets);
+
+      // Reflect saved keys in the hasKey flags handed back to the app.
+      const savedEndpoints = endpoints.map((e) => ({
+        ...e, hasKey: e.hasKey || !!keyUpdates[e.id],
+      }));
       onSave({
-        apiKey:        trimmedKey       || currentApiKey,
-        openaiApiKey:  trimmedOpenaiKey || currentOpenaiApiKey,
-        slotConfig:    slots,
-        ollamaUrl:     serverUrl,
-        ollamaApiKey:  ollamaKey,
-        endpointFormat: format,
-        sendTargets:   targets,
+        apiKey:       trimmedKey       || currentApiKey,
+        openaiApiKey: trimmedOpenaiKey || currentOpenaiApiKey,
+        slotConfig:   slots,
+        endpoints:    savedEndpoints,
+        sendTargets:  targets,
       });
     } finally {
       setSaving(false);
     }
   }
 
-  // Can save iff every slot has the credentials it needs.
+  // Can save iff every slot has the credentials/endpoint it needs.
   const hasAnthropicKey = !!(key.trim() || currentApiKey);
   const hasOpenaiKey    = !!(openaiKey.trim() || currentOpenaiApiKey);
   const SLOT_KEYS = ['classify', 'generateSimple', 'generateComplex'];
   const slotList = SLOT_KEYS.map((k) => slots[k]).filter(Boolean);
+  const endpointById = (id) => endpoints.find((e) => e.id === id);
   const slotIsSatisfied = (s) => {
-    if (s.provider === 'ollama')    return !!serverUrl;
+    if (s.provider === 'ollama')    { const ep = endpointById(s.endpointId); return !!(ep && ep.url && s.model); }
     if (s.provider === 'openai')    return hasOpenaiKey;
     if (s.provider === 'anthropic') return s.authMethod === 'subscription' || hasAnthropicKey;
     return false;
@@ -800,69 +838,89 @@ function SettingsView({
           )}
         </SettingsSectionCard>
 
-        {/* Custom Endpoint */}
+        {/* Endpoints */}
         <SettingsSectionCard
-          title="Custom Endpoint"
-          summary={ollamaModels.length > 0
-            ? `${endpointFormatLabel(format)} · ${ollamaModels.length} model${ollamaModels.length > 1 ? 's' : ''}`
-            : endpointFormatLabel(format)}
+          title="Endpoints"
+          summary={endpoints.length > 0
+            ? `${endpoints.length} endpoint${endpoints.length > 1 ? 's' : ''}`
+            : 'None'}
           defaultOpen={false}
         >
-          <div className="field-group">
-            <label className="field-label" htmlFor="endpoint-url-input">Server URL</label>
-            <input
-              id="endpoint-url-input"
-              type="url"
-              className="text-input"
-              placeholder="http://localhost:11434"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-          <div className="field-group">
-            <label className="field-label" htmlFor="endpoint-format-select">API Format</label>
-            <select
-              id="endpoint-format-select"
-              className="text-input select-input"
-              value={format}
-              onChange={(e) => setFormat(e.target.value)}
-            >
-              {ENDPOINT_FORMATS.map((f) => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field-group">
-            <label className="field-label" htmlFor="endpoint-key-input">
-              API Key <span className="field-label-optional">(optional)</span>
-            </label>
-            <input
-              id="endpoint-key-input"
-              type="password"
-              className="text-input"
-              placeholder="Leave empty if not required"
-              value={ollamaKey}
-              onChange={(e) => setOllamaKey(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-          <div className="ollama-fetch-row">
-            <button
-              className="btn btn-secondary"
-              onClick={handleFetchModels}
-              disabled={!serverUrl || fetchingModels}
-            >
-              {fetchingModels
-                ? <><span className="btn-spinner" /> Connecting...</>
-                : 'Fetch Models'}
-            </button>
-            {fetchError && (
-              <span className="ollama-fetch-error" role="alert">{fetchError}</span>
-            )}
-          </div>
+          {endpoints.map((ep) => {
+            const fetchState = endpointFetch[ep.id] || {};
+            const models = endpointModels[ep.id] || [];
+            return (
+              <div key={ep.id} className="endpoint-card">
+                <div className="endpoint-card-head">
+                  <input
+                    className="text-input endpoint-name"
+                    placeholder="Endpoint name (e.g. Home Ollama)"
+                    value={ep.name}
+                    onChange={(e) => updateEndpoint(ep.id, { name: e.target.value })}
+                    spellCheck={false}
+                  />
+                  <button
+                    className="send-target-remove"
+                    onClick={() => removeEndpoint(ep.id)}
+                    aria-label={`Remove ${ep.name || 'endpoint'}`}
+                    title="Remove endpoint"
+                  >
+                    <IconTrash />
+                  </button>
+                </div>
+                <input
+                  type="url"
+                  className="text-input"
+                  placeholder="https://host:port"
+                  value={ep.url}
+                  onChange={(e) => updateEndpoint(ep.id, { url: e.target.value })}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <div className="endpoint-row">
+                  <select
+                    className="text-input select-input"
+                    value={ep.format}
+                    onChange={(e) => updateEndpoint(ep.id, { format: e.target.value })}
+                    aria-label="API format"
+                  >
+                    {ENDPOINT_FORMATS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="password"
+                    className="text-input"
+                    placeholder={ep.hasKey ? '••••••••  (saved)' : 'API key (optional)'}
+                    value={endpointKeyInputs[ep.id] || ''}
+                    onChange={(e) => setEndpointKeyInputs((p) => ({ ...p, [ep.id]: e.target.value }))}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="ollama-fetch-row">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => fetchEndpointModels(ep)}
+                    disabled={!ep.url || fetchState.loading}
+                  >
+                    {fetchState.loading
+                      ? <><span className="btn-spinner" /> Connecting...</>
+                      : 'Fetch Models'}
+                  </button>
+                  {models.length > 0 && !fetchState.error && (
+                    <span className="endpoint-model-count">{models.length} models</span>
+                  )}
+                  {fetchState.error && (
+                    <span className="ollama-fetch-error" role="alert">{fetchState.error}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <button className="btn btn-secondary btn-full" onClick={addEndpoint}>
+            <IconPlus /> Add Endpoint
+          </button>
         </SettingsSectionCard>
 
         {/* Model Slots */}
@@ -874,7 +932,8 @@ function SettingsView({
             onChange={(v) => updateSlot('classify', v)}
             anthropicModels={anthropicModels}
             openaiModels={openaiModels}
-            ollamaModels={ollamaModels}
+            endpoints={endpoints}
+            endpointModels={endpointModels}
           />
           <SlotModelSelect
             label="Simple & Standard Generation"
@@ -883,7 +942,8 @@ function SettingsView({
             onChange={(v) => updateSlot('generateSimple', v)}
             anthropicModels={anthropicModels}
             openaiModels={openaiModels}
-            ollamaModels={ollamaModels}
+            endpoints={endpoints}
+            endpointModels={endpointModels}
           />
           <SlotModelSelect
             label="Complex Generation"
@@ -892,7 +952,8 @@ function SettingsView({
             onChange={(v) => updateSlot('generateComplex', v)}
             anthropicModels={anthropicModels}
             openaiModels={openaiModels}
-            ollamaModels={ollamaModels}
+            endpoints={endpoints}
+            endpointModels={endpointModels}
           />
         </SettingsSectionCard>
 
@@ -978,7 +1039,7 @@ function SettingsView({
 
 // ── MainView ──────────────────────────────────────────────────────────────────
 
-function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpointFormat, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
+function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
   const [task,         setTask]         = useState('');
   const [mode,         setMode]         = useState('text');
   const [aspectRatio,  setAspectRatio]  = useState('1:1');
@@ -995,7 +1056,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
   const [toast,        setToast]        = useState('');
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [openaiModels, setOpenaiModels] = useState(FALLBACK_OPENAI_MODELS);
-  const [ollamaModels, setOllamaModels] = useState([]);
+  const [endpointModels, setEndpointModels] = useState({}); // id → [models]
 
   // Load persisted mode + aspect ratio on mount
   useEffect(() => {
@@ -1012,7 +1073,7 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
     }).catch(() => {});
   }, [mode]);
 
-  // Fetch all three model lists for the override row
+  // Fetch model lists for the override row — Anthropic, OpenAI, and each endpoint.
   useEffect(() => {
     promptService.fetchAnthropicModels().then((result) => {
       if (result.success && result.models.length > 0) setAnthropicModels(result.models);
@@ -1022,12 +1083,14 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
       if (result.success && result.models.length > 0) setOpenaiModels(result.models);
     }).catch(() => {});
 
-    if (ollamaUrl) {
-      promptService.fetchOllamaModels(ollamaUrl, ollamaApiKey || '', endpointFormat).then((result) => {
-        if (result.success) setOllamaModels(result.models);
-      });
+    for (const ep of endpoints) {
+      if (!ep.url) continue;
+      promptService.fetchOllamaModels(ep.url, '', ep.format, ep.id).then((result) => {
+        if (result.success) setEndpointModels((prev) => ({ ...prev, [ep.id]: result.models }));
+      }).catch(() => {});
     }
-  }, [ollamaUrl, ollamaApiKey, endpointFormat, openaiApiKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoints, openaiApiKey]);
 
   const modelLabel = (() => {
     const slot = slotConfig?.generateSimple;
@@ -1253,7 +1316,8 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
                   config={slotConfig?.classify}
                   anthropicModels={anthropicModels}
                   openaiModels={openaiModels}
-                  ollamaModels={ollamaModels}
+                  endpoints={endpoints}
+                  endpointModels={endpointModels}
                   onChange={handleSlotChange}
                 />
                 <OverrideSlot
@@ -1262,7 +1326,8 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
                   config={slotConfig?.generateSimple}
                   anthropicModels={anthropicModels}
                   openaiModels={openaiModels}
-                  ollamaModels={ollamaModels}
+                  endpoints={endpoints}
+                  endpointModels={endpointModels}
                   onChange={handleSlotChange}
                 />
                 <OverrideSlot
@@ -1271,7 +1336,8 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
                   config={slotConfig?.generateComplex}
                   anthropicModels={anthropicModels}
                   openaiModels={openaiModels}
-                  ollamaModels={ollamaModels}
+                  endpoints={endpoints}
+                  endpointModels={endpointModels}
                   onChange={handleSlotChange}
                 />
               </div>
@@ -1312,23 +1378,14 @@ function MainView({ slotConfig, setSlotConfig, ollamaUrl, ollamaApiKey, endpoint
 
 function OverrideSlot({
   label, slotKey, config,
-  anthropicModels = [], openaiModels = [], ollamaModels = [],
+  anthropicModels = [], openaiModels = [], endpoints = [], endpointModels = {},
   onChange,
 }) {
   const currentValue = encodeSlot(config);
 
-  const includeCurrent = (provider, authMethod, list) => {
-    const isHere =
-      config?.provider === provider &&
-      (config.authMethod || 'apiKey') === authMethod &&
-      config.model && !list.includes(config.model);
-    return isHere ? [config.model, ...list] : list;
-  };
-
-  const anthApiList = includeCurrent('anthropic', 'apiKey',       anthropicModels);
-  const anthSubList = includeCurrent('anthropic', 'subscription', anthropicModels);
-  const openaiList  = includeCurrent('openai',    'apiKey',       openaiModels);
-  const ollamaList  = includeCurrent('ollama',    'apiKey',       ollamaModels);
+  const anthApiList = withCurrent(anthropicModels, config?.provider === 'anthropic' && (config.authMethod || 'apiKey') === 'apiKey',       config?.model);
+  const anthSubList = withCurrent(anthropicModels, config?.provider === 'anthropic' && config.authMethod === 'subscription', config?.model);
+  const openaiList  = withCurrent(openaiModels,    config?.provider === 'openai',                                            config?.model);
 
   return (
     <div className="override-slot">
@@ -1355,13 +1412,7 @@ function OverrideSlot({
             ))}
           </optgroup>
         )}
-        {ollamaList.length > 0 && (
-          <optgroup label="Custom Endpoint">
-            {ollamaList.map((m) => (
-              <option key={`l-${m}`} value={`ollama:apiKey:${m}`}>{m}</option>
-            ))}
-          </optgroup>
-        )}
+        <EndpointOptgroups endpoints={endpoints} endpointModels={endpointModels} config={config} />
       </select>
     </div>
   );

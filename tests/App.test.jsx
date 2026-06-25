@@ -24,13 +24,9 @@ vi.mock('../src/lib/promptService.js', () => ({
   saveCloseToTray:     vi.fn(),
   getSlotConfig:       vi.fn(),
   saveSlotConfig:      vi.fn(),
-  getOllamaUrl:        vi.fn(),
-  saveOllamaUrl:       vi.fn(),
-  getOllamaApiKey:     vi.fn(),
-  saveOllamaApiKey:    vi.fn(),
+  getEndpoints:        vi.fn(),
+  saveEndpoints:       vi.fn(),
   fetchOllamaModels:   vi.fn(),
-  getEndpointFormat:   vi.fn(),
-  saveEndpointFormat:  vi.fn(),
   fetchAnthropicModels: vi.fn(),
   getSendTargets:      vi.fn(),
   saveSendTargets:     vi.fn(),
@@ -61,12 +57,9 @@ function setupDefaultMocks() {
     classify:        { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
     generateSimple:  { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
     generateComplex: { provider: 'anthropic', authMethod: 'apiKey', model: 'claude-haiku-4-5-20251001' },
-    ollamaUrl: 'http://localhost:11434',
   });
-  promptService.getOllamaUrl.mockResolvedValue('http://localhost:11434');
-  promptService.getOllamaApiKey.mockResolvedValue('');
-  promptService.getEndpointFormat.mockResolvedValue('openai');
-  promptService.saveEndpointFormat.mockResolvedValue(true);
+  promptService.getEndpoints.mockResolvedValue([]);
+  promptService.saveEndpoints.mockResolvedValue(true);
   promptService.getCloseToTray.mockResolvedValue(false);
   promptService.saveCloseToTray.mockResolvedValue(true);
   promptService.fetchOllamaModels.mockResolvedValue({ success: true, models: [] });
@@ -130,8 +123,7 @@ describe('App — Settings view', () => {
   beforeEach(() => {
     promptService.getApiKey.mockResolvedValue('');
     promptService.saveApiKey.mockResolvedValue(true);
-    promptService.saveOllamaUrl.mockResolvedValue(true);
-    promptService.saveOllamaApiKey.mockResolvedValue(true);
+    promptService.saveEndpoints.mockResolvedValue(true);
     promptService.saveSlotConfig.mockResolvedValue(true);
     promptService.saveSendTargets.mockResolvedValue(true);
   });
