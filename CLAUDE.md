@@ -94,7 +94,7 @@ The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge
 - **Inline SVG icons** — no icon library dependency.
 - **CSS custom properties** for theming. Dark is default; light theme is opt-in via `html.light` class on `<html>`. Accent color: `#f59e0b` (fire orange), hover `#ea580c`, active `#d97706`. Font: system-ui for UI, Consolas/Cascadia Code for code.
 - **Pre-paint theme flash prevention.** `preload.js` reads the saved theme via the *synchronous* `get-theme-sync` IPC channel and applies `html.light` before the renderer's first paint. The handler must be registered **before** `app.whenReady()` (a previous regression crashed IPC when registered later). Runtime theme toggles use the async `get-theme` / `save-theme` channels.
-- **Window dimensions:** 480px wide, height toggles between 320 (input) and 640 (results) via `resizeWindow` IPC.
+- **Window dimensions:** a single fixed comfortable size (620×800), set in `electron/main.js`. The app no longer resizes itself per mode/state (still user-resizable). The `resize-window` IPC remains available but is unused by the UI.
 - **Window chrome** is custom (frameless) — minimize hides to tray, close hides to tray. Real quit is via tray context menu.
 - **IPC pattern:** `ipcMain.handle` / `ipcRenderer.invoke` for all communication. Channel names use kebab-case (`generate-prompt`, `save-slot-config`).
 - **Prompt output** is a JSON object with variable fields per tier (4, 6, or 8 string fields) plus `tier`, `generateProvider`, `generateModel` metadata.
