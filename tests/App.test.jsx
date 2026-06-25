@@ -270,6 +270,25 @@ describe('App — Main view', () => {
     });
   });
 
+  it('New prompt clears the input and the result', async () => {
+    promptService.generatePrompt.mockResolvedValue({
+      success: true,
+      data: { role: 'r', instructions: 'i', assembled: 'THE FULL PROMPT TEXT' },
+      tier: 'simple', generateProvider: 'anthropic', generateModel: DEFAULT_MODEL,
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), { target: { value: 'some task' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+    await waitFor(() => expect(screen.getByText('THE FULL PROMPT TEXT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /New prompt/i }));
+
+    expect(screen.getByPlaceholderText(/Describe your task/).value).toBe('');
+    expect(screen.queryByText('THE FULL PROMPT TEXT')).not.toBeInTheDocument();
+  });
+
   it('badges the result with the model that generated it, incl. a fallback flag', async () => {
     promptService.generatePrompt.mockResolvedValue({
       success: true,

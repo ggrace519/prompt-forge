@@ -197,6 +197,17 @@ function IconClock() {
   );
 }
 
+function IconNew() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+    </svg>
+  );
+}
+
 function IconSend() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -1180,16 +1191,20 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
   const [endpointModels, setEndpointModels] = useState({}); // id → [models]
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Ctrl/⌘+K toggles the command palette from anywhere in the main view.
+  // Ctrl/⌘+K toggles the command palette; Ctrl/⌘+N starts a new prompt.
   useEffect(() => {
     function onKey(e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        handleNewPrompt();
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load persisted mode + aspect ratio on mount
@@ -1335,6 +1350,19 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
     setHistory([]);
   }
 
+  // Reset the workspace to a blank prompt (keeps history + settings).
+  function handleNewPrompt() {
+    setTask('');
+    setResult(null);
+    setResultMeta(null);
+    setTier(null);
+    setError('');
+    setActiveTab('assembled');
+    setShowOverride(false);
+    setShowHistory(false);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   async function handleSlotChange(slotKey, decoded) {
     const updated = {
       ...slotConfig,
@@ -1350,6 +1378,7 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
 
   const hasTextResult = !!result && mode === 'text';
   const paletteActions = [
+    { id: 'new',      label: 'New Prompt', hint: 'Ctrl+N', run: () => handleNewPrompt() },
     { id: 'generate', label: 'Generate Prompt', hint: 'Ctrl+↵', disabled: !task.trim() || loading, run: () => handleGenerate() },
     ...(hasTextResult ? [
       { id: 'copy',      label: 'Copy Assembled Prompt', run: () => { promptService.copyToClipboard(result.assembled); setToast('Copied to clipboard'); } },
@@ -1379,6 +1408,14 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
           </span>
         </div>
         <div className="top-bar-right">
+          <button
+            className="icon-btn"
+            onClick={handleNewPrompt}
+            title="New prompt (Ctrl+N)"
+            aria-label="New prompt"
+          >
+            <IconNew />
+          </button>
           <button
             className="cmdk-chip"
             onClick={() => setPaletteOpen(true)}
