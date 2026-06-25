@@ -82,6 +82,33 @@ describe('extractJSON — markdown fences', () => {
   });
 });
 
+// Regression: a ```ts/```js code fence INSIDE a JSON string value used to hijack
+// extraction (the fence regex matched the inner block), yielding "ts\n// src/…"
+// and "is not valid JSON". Extraction must keep the whole object instead.
+describe('extractJSON — code fences embedded in string values', () => {
+  it('keeps a ```ts fence that lives inside a JSON string value', () => {
+    const raw = JSON.stringify({
+      role: 'Architect',
+      examples: 'Layout:\n```ts\n// src/app.ts\nexport const cfg = 1;\n```',
+    });
+    const parsed = JSON.parse(extractJSON(raw));
+    expect(parsed.role).toBe('Architect');
+    expect(parsed.examples).toContain('```ts');
+  });
+
+  it('does not hijack an inner fence when the object is also ```json-wrapped', () => {
+    const raw = '```json\n' +
+      JSON.stringify({ role: 'r', examples: '```ts\nconst a = 1;\n```' }) +
+      '\n```';
+    expect(JSON.parse(extractJSON(raw)).examples).toContain('```ts');
+  });
+
+  it('returns the JSON object, not the inner code (the reported "ts\\n// src/" bug)', () => {
+    const raw = JSON.stringify({ instructions: 'do', examples: '```ts\n// src/main.ts\n```' });
+    expect(extractJSON(raw).startsWith('{')).toBe(true);
+  });
+});
+
 describe('extractJSON — JSON embedded in prose', () => {
   it('extracts JSON from surrounding text', () => {
     const raw = 'Here is the result: {"role":"inline"} — that is all.';

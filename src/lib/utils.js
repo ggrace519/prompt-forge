@@ -40,13 +40,19 @@ export function extractJSON(text) {
   if (text == null) return '';
 
   // Case 4 — drop reasoning-model thinking first
-  text = stripReasoning(text);
+  text = stripReasoning(text).trim();
 
-  // Case 2 — strip markdown fences
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
+  // Case 2 — if the WHOLE response is wrapped in a markdown fence, strip the
+  // wrapper lines. Only a fence at the very start counts: never match a fence
+  // embedded in the content (e.g. a ```ts code block inside a JSON string
+  // value), which previously hijacked extraction and yielded "ts\n// src/…".
+  if (text.startsWith('```')) {
+    text = text.replace(/^```[^\n]*\n?/, '').replace(/\n?```\s*$/, '').trim();
+  }
 
-  // Case 3 / Case 1 — find outermost { … }
+  // Case 3 / Case 1 — take the outermost { … }. Robust even when string values
+  // contain code with braces or backtick fences, since those sit between the
+  // first { and the last }.
   const start = text.indexOf('{');
   const end   = text.lastIndexOf('}');
   if (start !== -1 && end !== -1 && end > start) {

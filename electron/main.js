@@ -148,11 +148,15 @@ function stripReasoning(text) {
 
 function extractJSON(text) {
   if (text == null) return '';
-  text = stripReasoning(text);
-  // Strip markdown code fences if the model wraps the JSON
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  // Find the outermost {...}
+  text = stripReasoning(text).trim();
+  // Only strip a markdown fence that WRAPS the whole response (at the very
+  // start) — never one embedded in the content (e.g. a ```ts code block inside
+  // a JSON string value), which previously hijacked extraction → "ts\n// src/…".
+  if (text.startsWith('```')) {
+    text = text.replace(/^```[^\n]*\n?/, '').replace(/\n?```\s*$/, '').trim();
+  }
+  // Take the outermost {...} — robust even when string values contain code
+  // (braces or backtick fences sit between the first { and the last }).
   const start = text.indexOf('{');
   const end   = text.lastIndexOf('}');
   if (start !== -1 && end !== -1 && end > start) {
