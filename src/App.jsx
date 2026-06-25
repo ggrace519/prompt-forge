@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as promptService from './lib/promptService';
-import logoUrl from './assets/logo.png';
 import { IMAGE_SECTIONS, VIDEO_SECTIONS, appendAspectRatio } from './lib/utils.js';
 import { scoreColor, scoreLabel } from './lib/testBench.js';
 
@@ -226,6 +225,42 @@ function IconNew() {
       <path d="M12 20h9"/>
       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
     </svg>
+  );
+}
+
+// The forge mark — a crisp ember flame. The product's one piece of identity,
+// used in the top bar, the empty-state wordmark, and Settings. Replaces the
+// heavy raster badge. `gid` keeps the gradient id unique per instance.
+let __forgeGid = 0;
+function IconForge({ size = 22 }) {
+  const id = `forge-grad-${++__forgeGid}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="forge-mark">
+      <defs>
+        <linearGradient id={id} x1="7" y1="2" x2="17" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#fcd34d" />
+          <stop offset="0.5" stopColor="#f59e0b" />
+          <stop offset="1" stopColor="#ea580c" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M13.4 1.5c-.4 3.1 1.2 4.9 2.4 6.6 1.2 1.7 2.2 3.4 2.2 5.6a6 6 0 0 1-12 0c0-1.7.6-3 1.6-4.2.1 1.2.8 1.9 1.7 2.1-1.4-3.2.6-7.8 4.1-10.1z"
+        fill={`url(#${id})`}
+      />
+      <path
+        d="M12.8 12c.7-.5 1-1.4.8-2.4 1.1.8 1.8 2 1.8 3.4a3.4 3.4 0 0 1-6.8.1c0-1 .4-1.9 1.1-2.6.1 1.1.9 1.8 2 2z"
+        fill="#fef3c7" opacity="0.85"
+      />
+    </svg>
+  );
+}
+
+function Wordmark({ size = 16 }) {
+  return (
+    <span className="wordmark" style={{ fontSize: size }}>
+      <IconForge size={size * 1.15} />
+      <span className="wordmark-text">Prompt<span className="wordmark-accent">Forge</span></span>
+    </span>
   );
 }
 
@@ -995,7 +1030,13 @@ function SettingsView({
 
       <div className="settings-inner">
         <div className="settings-header">
-          <img src={logoUrl} alt="PromptForge" className="app-logo" />
+          <div className="settings-brand">
+            <IconForge size={40} />
+            <div className="settings-brand-text">
+              <span className="settings-brand-name">Prompt<span className="wordmark-accent">Forge</span></span>
+              <span className="settings-brand-tag">Forge structured prompts from plain language</span>
+            </div>
+          </div>
         </div>
 
         {/* API Keys */}
@@ -1548,7 +1589,7 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
     <div className="app-shell">
       <header className="top-bar">
         <div className="top-bar-left">
-          <img src={logoUrl} alt="PromptForge" className="app-logo-sm" />
+          <IconForge size={18} />
           <span
             className="model-badge"
             title={modelLabel}
@@ -1618,6 +1659,9 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
         </div>
       </header>
 
+      {/* Signature: banked forge coals along the window base — they flare while generating. */}
+      <div className={`ember-glow${loading ? ' is-forging' : ''}`} aria-hidden="true" />
+
       {showHistory ? (
         <HistoryPanel
           history={history}
@@ -1629,6 +1673,12 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
         <div className={`main-body${mode === 'image' || mode === 'video' ? ' media-mode' : ''}${(result || loading) ? ' has-content' : ' is-empty'}`}>
           <ModeToggle mode={mode} onChange={handleModeChange} />
           <div className="input-group">
+            {(!result && !loading) && (
+              <div className="empty-identity">
+                <Wordmark size={21} />
+                <p className="empty-tagline">Turn a plain task into a structured, ready-to-paste prompt.</p>
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               className="task-textarea"
