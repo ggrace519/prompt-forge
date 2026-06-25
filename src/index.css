@@ -294,6 +294,13 @@ button, label, span, h1, p {
   overflow-y: auto;
 }
 
+/* Keep every section at its natural height so the container scrolls instead of
+   flexbox squishing the cards (which `.settings-section { overflow: hidden }`
+   would then clip — e.g. the OpenAI field or an expanded Custom Endpoint). */
+.settings-inner > * {
+  flex-shrink: 0;
+}
+
 .field-group {
   display: flex;
   flex-direction: column;
