@@ -35,6 +35,18 @@ export async function generatePrompt(task, tier, mode) {
   return result;
 }
 
+/**
+ * Run a generated prompt against a sample input and grade it (Test Bench).
+ * @returns {Promise<{success:boolean, output?:string, judgement?:object, runProvider?:string, runModel?:string, error?:string}>}
+ */
+export async function runTestBench(assembled, sampleInput, tier) {
+  const result = await getIPC().runTestBench({ assembled, sampleInput, tier });
+  if (!result.success) {
+    throw new Error(result.error || 'Test bench run failed');
+  }
+  return result;
+}
+
 // ── API key (shared Anthropic key) ──────────────────────────────────────────
 
 export async function saveApiKey(key) {

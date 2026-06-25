@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generatePrompt: (config) =>
     ipcRenderer.invoke('generate-prompt', config),
 
+  // Test Bench — run + grade the generated prompt
+  runTestBench: (config) =>
+    ipcRenderer.invoke('run-test-bench', config),
+
   // API key (shared Anthropic key)
   saveApiKey: (key) =>
     ipcRenderer.invoke('save-api-key', key),

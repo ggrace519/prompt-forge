@@ -1996,3 +1996,115 @@ button, label, span, h1, p {
   align-self: center;
   max-width: none;
 }
+
+/* ── Test Bench (run + grade a generated prompt) ───────────────────────────── */
+
+.testbench-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.tb-sample { min-height: 56px; }
+
+.tb-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tb-verdict {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tb-verdict-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tb-verdict-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.tb-verdict-label.tier-simple   { color: #4ade80; }
+.tb-verdict-label.tier-standard { color: var(--accent); }
+.tb-verdict-label.tier-complex  { color: #f87171; }
+
+.tb-model {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Score ring ────────────────────────────────────────────────────────────── */
+
+.score-ring { flex-shrink: 0; }
+
+.score-ring-track {
+  fill: none;
+  stroke: var(--border-focus);
+  stroke-width: 5;
+}
+
+.score-ring-arc {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.score-ring.tier-simple   .score-ring-arc { stroke: #4ade80; }
+.score-ring.tier-standard .score-ring-arc { stroke: var(--accent); }
+.score-ring.tier-complex  .score-ring-arc { stroke: #f87171; }
+
+.score-ring-text {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.tb-critique {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.tb-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tb-li {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.tb-strengths .tb-li { color: var(--success); }
+.tb-weaknesses .tb-li { color: var(--accent); }
+
+.tb-output-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.tb-output { max-height: 220px; overflow: auto; }

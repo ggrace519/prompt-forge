@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import * as promptService from './lib/promptService';
 import logoUrl from './assets/logo.png';
 import { IMAGE_SECTIONS, VIDEO_SECTIONS, appendAspectRatio } from './lib/utils.js';
+import { scoreColor, scoreLabel } from './lib/testBench.js';
 
 const SECTIONS = [
   { key: 'role',          label: 'Role & Objective'  },
@@ -1342,6 +1343,7 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
       { id: 'copy',      label: 'Copy Assembled Prompt', run: () => { promptService.copyToClipboard(result.assembled); setToast('Copied to clipboard'); } },
       { id: 'tab-asm',   label: 'View · Assembled', run: () => setActiveTab('assembled') },
       { id: 'tab-brk',   label: 'View · Breakdown', run: () => setActiveTab('breakdown') },
+      { id: 'tab-test',  label: 'View · Test Bench', run: () => setActiveTab('testbench') },
       { id: 'tier-s',    label: 'Regenerate · Simple',   run: () => handleGenerate('simple') },
       { id: 'tier-st',   label: 'Regenerate · Standard', run: () => handleGenerate('standard') },
       { id: 'tier-c',    label: 'Regenerate · Complex',  run: () => handleGenerate('complex') },
@@ -1649,6 +1651,113 @@ function HistoryPanel({ history, onRestore, onClear, onClose }) {
 
 // ── ResultsPanel ──────────────────────────────────────────────────────────────
 
+// ── ScoreRing — radial gauge for a 0–10 Test Bench score ─────────────────────
+
+function ScoreRing({ score }) {
+  const r = 22;
+  const c = 2 * Math.PI * r;
+  const safe = Math.max(0, Math.min(10, score));
+  const dash = (safe / 10) * c;
+  const tone = scoreColor(score);
+  return (
+    <svg className={`score-ring tier-${tone}`} width="52" height="52" viewBox="0 0 52 52" role="img" aria-label={`Score ${score} out of 10`}>
+      <circle cx="26" cy="26" r={r} className="score-ring-track" />
+      <circle
+        cx="26" cy="26" r={r}
+        className="score-ring-arc"
+        strokeDasharray={`${dash} ${c}`}
+        transform="rotate(-90 26 26)"
+      />
+      <text x="26" y="27" textAnchor="middle" dominantBaseline="central" className="score-ring-text">
+        {score}
+      </text>
+    </svg>
+  );
+}
+
+// ── TestBenchTab — run the generated prompt on a sample, grade it (LLM-as-judge)
+
+function TestBenchTab({ assembled, tier }) {
+  const [sample,  setSample]  = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+  const [run,     setRun]     = useState(null); // { output, judgement, runModel }
+
+  async function handleRun() {
+    if (loading) return;
+    setLoading(true);
+    setError('');
+    setRun(null);
+    try {
+      const res = await promptService.runTestBench(assembled, sample, tier);
+      setRun(res);
+    } catch (err) {
+      setError(err.message || 'Test run failed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const judgement = run?.judgement;
+  const score = judgement?.score;
+
+  return (
+    <div className="testbench-tab">
+      <label className="field-label" htmlFor="tb-sample">Sample input (optional)</label>
+      <textarea
+        id="tb-sample"
+        className="task-textarea tb-sample"
+        rows={3}
+        placeholder="e.g. a real example the prompt should handle…"
+        value={sample}
+        onChange={(e) => setSample(e.target.value)}
+        spellCheck={false}
+      />
+      <button className="btn btn-primary btn-full" onClick={handleRun} disabled={loading}>
+        {loading ? <><span className="btn-spinner" /> Running &amp; grading…</> : 'Run prompt & grade'}
+      </button>
+
+      {error && (
+        <div className="error-banner" role="alert" style={{ marginTop: 8 }}>
+          <span className="error-icon"><IconWarning /></span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {run && (
+        <div className="tb-result">
+          {score != null && (
+            <div className="tb-verdict">
+              <ScoreRing score={score} />
+              <div className="tb-verdict-meta">
+                <span className={`tb-verdict-label tier-${scoreColor(score)}`}>{scoreLabel(score)}</span>
+                {run.runModel && <span className="tb-model" title={run.runModel}>{run.runModel}</span>}
+              </div>
+            </div>
+          )}
+          {judgement?.critique && <p className="tb-critique">{judgement.critique}</p>}
+          {(judgement?.strengths?.length > 0 || judgement?.weaknesses?.length > 0) && (
+            <div className="tb-lists">
+              {judgement.strengths?.length > 0 && (
+                <div className="tb-list tb-strengths">
+                  {judgement.strengths.map((s, i) => <div key={i} className="tb-li">+ {s}</div>)}
+                </div>
+              )}
+              {judgement.weaknesses?.length > 0 && (
+                <div className="tb-list tb-weaknesses">
+                  {judgement.weaknesses.map((w, i) => <div key={i} className="tb-li">− {w}</div>)}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="tb-output-label">Model output</div>
+          <pre className="assembled-text tb-output">{run.output}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ResultsPanel({
   result, tier, activeTab, onTabChange, onTierChange,
   sendTargets, toast, setToast,
@@ -1682,6 +1791,16 @@ export function ResultsPanel({
         >
           Breakdown
         </button>
+        {!isMedia && (
+          <button
+            role="tab"
+            aria-selected={activeTab === 'testbench'}
+            className={`tab-btn${activeTab === 'testbench' ? ' active' : ''}`}
+            onClick={() => onTabChange('testbench')}
+          >
+            Test
+          </button>
+        )}
         {tier && !isMedia && (
           <TierBadgeDropdown tier={tier} onTierChange={onTierChange} />
         )}
@@ -1701,6 +1820,9 @@ export function ResultsPanel({
           </>
         )}
         {activeTab === 'breakdown' && <BreakdownTab result={result} sections={sections} />}
+        {activeTab === 'testbench' && !isMedia && (
+          <TestBenchTab assembled={result.assembled} tier={tier} />
+        )}
       </div>
     </div>
   );

@@ -108,6 +108,7 @@ The agent SDK is ESM and main.js is CJS — the dynamic `import()` is the bridge
 | Channel | Direction | Purpose |
 |---------|-----------|---------|
 | `generate-prompt` | invoke | Two-call classify+generate flow. Accepts `{task, tier?}` |
+| `run-test-bench` | invoke | Test Bench: run the assembled prompt on a sample (generate slot) + grade the output 0-10 with an LLM-as-judge call (classify slot). Returns `{output, judgement, runModel}`. Judge parsing reuses the reasoning-safe `extractJSON`. |
 | `save-api-key` / `get-api-key` | invoke | Shared Anthropic API key (encrypted) |
 | `save-openai-api-key` / `get-openai-api-key` | invoke | Shared OpenAI API key (encrypted) |
 | `get-slot-config` / `save-slot-config` | invoke | Three-slot `{provider, authMethod, model, endpointId}` configuration |

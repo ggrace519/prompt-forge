@@ -156,6 +156,46 @@ function extractJSON(text) {
   return text.trim();
 }
 
+// ── Test Bench rubric + judge parsing (CJS mirror of src/lib/testBench.js) ─────
+// Keep in sync with the ESM copy (same convention as extractJSON).
+
+const TEST_BENCH_RUBRIC = `You are a strict prompt-evaluation judge. You are given a PROMPT (an engineered AI prompt) and the OUTPUT a model produced when that prompt was run against a sample task.
+
+Score how well the OUTPUT fulfils the PROMPT's intent, on a 0-10 integer scale:
+- 9-10: excellent — follows every instruction, correct format, no drift
+- 6-8:  good — minor issues or omissions
+- 3-5:  weak — ignores constraints or wrong format
+- 0-2:  failing — off-task or unusable
+
+Respond with ONLY raw, valid JSON — no markdown fences, no prose:
+
+{"score": <integer 0-10>, "critique": "<one or two sentences on the single most important issue>", "strengths": ["<short>", "..."], "weaknesses": ["<short>", "..."]}`;
+
+function clampScore(n) {
+  const num = typeof n === 'number' ? n : parseFloat(n);
+  if (!Number.isFinite(num)) return null;
+  return Math.max(0, Math.min(10, Math.round(num)));
+}
+
+function parseJudgement(text) {
+  const fallback = { score: null, critique: '', strengths: [], weaknesses: [] };
+  if (typeof text !== 'string' || !text.trim()) return fallback;
+  const asArray = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : []);
+  try {
+    const obj = JSON.parse(extractJSON(text));
+    return {
+      score: clampScore(obj.score),
+      critique: typeof obj.critique === 'string' ? obj.critique.trim() : '',
+      strengths: asArray(obj.strengths),
+      weaknesses: asArray(obj.weaknesses),
+    };
+  } catch {
+    const m = text.match(/\bscore\b\D{0,8}(\d{1,2})|(\d{1,2})\s*\/\s*10/i);
+    const raw = m ? (m[1] ?? m[2]) : null;
+    return { ...fallback, score: clampScore(raw), critique: text.trim().slice(0, 200) };
+  }
+}
+
 // ── Image / video section maps (CJS mirror of src/lib/utils.js) ───────────────
 
 const IMAGE_SECTIONS_CJS = [
@@ -817,6 +857,48 @@ app.whenReady().then(() => {
       };
     } catch (err) {
       console.error('[generate-prompt] error:', err);
+      return { success: false, error: err.message || String(err) };
+    }
+  });
+
+  // Test Bench: run the generated prompt against a sample input on the user's
+  // own model, then grade the output with an LLM-as-judge call.
+  ipcMain.handle('run-test-bench', async (_event, { assembled, sampleInput, tier }) => {
+    try {
+      if (!assembled || !assembled.trim()) {
+        return { success: false, error: 'No prompt to test.' };
+      }
+
+      // 1. Run the prompt on the tier-matched generate slot.
+      const genSlot = (tier === 'complex') ? 'generateComplex' : 'generateSimple';
+      const genCreds = getSlotCredentials(genSlot);
+      const userMessage = (sampleInput && sampleInput.trim())
+        ? sampleInput.trim()
+        : 'Perform the task exactly as the system prompt instructs.';
+      const output = await callProvider(genCreds, assembled, userMessage);
+
+      // 2. Grade the output with the cheaper classify slot.
+      const judgeCreds = getSlotCredentials('classify');
+      const judgeMessage =
+        `PROMPT:\n${assembled}\n\nSAMPLE INPUT:\n${userMessage}\n\nOUTPUT:\n${output}`;
+      let judgement = { score: null, critique: '', strengths: [], weaknesses: [] };
+      try {
+        const judgeText = await callProvider(judgeCreds, TEST_BENCH_RUBRIC, judgeMessage, 1024);
+        judgement = parseJudgement(judgeText);
+      } catch (judgeErr) {
+        console.error('[run-test-bench] judge failed:', judgeErr.message);
+        judgement.critique = 'Judge call failed; output shown without a score.';
+      }
+
+      return {
+        success: true,
+        output,
+        judgement,
+        runProvider: genCreds.provider,
+        runModel: genCreds.model,
+      };
+    } catch (err) {
+      console.error('[run-test-bench] error:', err);
       return { success: false, error: err.message || String(err) };
     }
   });
