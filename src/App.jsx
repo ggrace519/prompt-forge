@@ -694,7 +694,7 @@ function SettingsView({
   // Settings is tall — grow the window so every section is reachable without
   // resizing by hand. Leaving Settings resizes back to the view-appropriate height.
   useEffect(() => {
-    promptService.resizeWindow({ width: 480, height: 760 });
+    promptService.resizeWindow({ width: 560, height: 860 });
 
     promptService.getCloseToTray().then(setCloseToTray).catch(() => {});
 
@@ -1233,9 +1233,9 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
   // Window dimensions per mode + state
   useEffect(() => {
     if (mode === 'image' || mode === 'video') {
-      promptService.resizeWindow({ width: 640, height: 720 });
+      promptService.resizeWindow({ width: 760, height: 860 });
     } else {
-      promptService.resizeWindow({ width: 480, height: result ? 640 : 320 });
+      promptService.resizeWindow({ width: 560, height: result ? 820 : 600 });
     }
   }, [mode, result]);
 

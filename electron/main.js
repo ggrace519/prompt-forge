@@ -325,8 +325,8 @@ function writeEndpointKey(id, key) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 480,
-    height: 320,
+    width: 560,
+    height: 600,
     show: false,
     frame: false,
     resizable: true,
