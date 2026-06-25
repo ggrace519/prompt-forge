@@ -15,6 +15,7 @@ const {
 } = require('electron');
 const path  = require('path');
 const Store = require('electron-store');
+const { autoUpdater } = require('electron-updater');
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -458,6 +459,32 @@ function toggleWindow() {
   win.isVisible() ? win.hide() : showWindow();
 }
 
+// ── Auto-update (GitHub Releases via electron-updater) ────────────────────────
+// autoDownload is off — we surface "update available" and let the user choose to
+// download/install (matches "installs automatically if the user wants"). The feed
+// comes from the `publish` config in package.json (github ggrace519/prompt-forge).
+
+function sendUpdateStatus(payload) {
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', payload);
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false;          // ask before downloading
+  autoUpdater.autoInstallOnAppQuit = true;   // apply a downloaded update on quit
+
+  autoUpdater.on('checking-for-update', () => sendUpdateStatus({ status: 'checking' }));
+  autoUpdater.on('update-available',     (info) => sendUpdateStatus({ status: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', () => sendUpdateStatus({ status: 'none' }));
+  autoUpdater.on('download-progress',    (p) => sendUpdateStatus({ status: 'downloading', percent: Math.round(p.percent || 0) }));
+  autoUpdater.on('update-downloaded',    (info) => sendUpdateStatus({ status: 'downloaded', version: info.version }));
+  autoUpdater.on('error',                (err) => sendUpdateStatus({ status: 'error', message: (err && err.message) || String(err) }));
+
+  // Auto-check shortly after launch (production only — dev has no update feed).
+  if (!isDev) {
+    setTimeout(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 4000);
+  }
+}
+
 // ── Sync IPC (must be registered before any window loads) ────────────────────
 
 ipcMain.on('get-theme-sync', (event) => {
@@ -519,6 +546,9 @@ app.whenReady().then(() => {
 
   // Global summon — bring PromptForge to the front from any app (Raycast-style).
   globalShortcut.register('CommandOrControl+Shift+Space', showWindow);
+
+  // Auto-update — check GitHub Releases shortly after launch.
+  setupAutoUpdater();
 
   // ── Provider call helper ──────────────────────────────────────────────────
 
@@ -1264,6 +1294,25 @@ app.whenReady().then(() => {
   ipcMain.handle('save-theme', (_event, theme) => {
     store.set('theme', theme);
     return true;
+  });
+
+  // ── Auto-update controls ───────────────────────────────────────────────────
+  ipcMain.handle('get-app-version', () => app.getVersion());
+
+  ipcMain.handle('updates-check', async () => {
+    if (isDev) return { ok: false, dev: true };
+    try { await autoUpdater.checkForUpdates(); return { ok: true }; }
+    catch (err) { return { ok: false, error: err.message || String(err) }; }
+  });
+
+  ipcMain.handle('updates-download', async () => {
+    try { await autoUpdater.downloadUpdate(); return { ok: true }; }
+    catch (err) { return { ok: false, error: err.message || String(err) }; }
+  });
+
+  ipcMain.handle('updates-install', () => {
+    isQuitting = true;            // let the close handler through so the installer can run
+    autoUpdater.quitAndInstall();
   });
 });
 

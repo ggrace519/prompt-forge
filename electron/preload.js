@@ -104,4 +104,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-theme'),
   saveTheme: (theme) =>
     ipcRenderer.invoke('save-theme', theme),
+
+  // Auto-update
+  getAppVersion: () =>
+    ipcRenderer.invoke('get-app-version'),
+  checkForUpdates: () =>
+    ipcRenderer.invoke('updates-check'),
+  downloadUpdate: () =>
+    ipcRenderer.invoke('updates-download'),
+  installUpdate: () =>
+    ipcRenderer.invoke('updates-install'),
+  onUpdateStatus: (callback) => {
+    const handler = (_e, payload) => callback(payload);
+    ipcRenderer.on('update-status', handler);
+    return () => ipcRenderer.removeListener('update-status', handler);
+  },
 });

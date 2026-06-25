@@ -8,6 +8,7 @@
     "postinstall": "node scripts/create-icon.js",
     "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"cross-env NODE_ENV=development vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
     "build": "vite build && electron-builder",
+    "release": "vite build && electron-builder --publish always",
     "start": "electron .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,6 +18,13 @@
     "appId": "com.promptforge.app",
     "productName": "PromptForge",
     "copyright": "Copyright © 2026 519lab.com, a registered trade name of Onward Investment LLC",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ggrace519",
+        "repo": "prompt-forge"
+      }
+    ],
     "directories": {
       "output": "release"
     },
@@ -55,6 +63,7 @@
     "@anthropic-ai/sdk": "^0.106.0",
     "axios": "^1.14.0",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.9",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
