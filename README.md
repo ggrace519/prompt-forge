@@ -70,6 +70,10 @@ The packaged app reads its update feed from the `build.publish` config
 (`github` → `ggrace519/prompt-forge`) and shows an in-app update banner when a
 newer release is available.
 
+> **Windows SmartScreen:** releases are not yet code-signed, so Windows may show
+> *"Windows protected your PC."* To install, click **More info → Run anyway**.
+> Code signing is planned for a future release.
+
 ---
 
 ## Providers & per-slot models
