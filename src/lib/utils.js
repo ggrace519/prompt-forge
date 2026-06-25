@@ -6,18 +6,41 @@
  */
 
 /**
- * Extract a JSON object string from a Claude API response.
+ * Strip a reasoning model's chain of thought. Models like DeepSeek-R1 and
+ * Qwen3 / QwQ wrap their thinking in <think>…</think> and put the real answer
+ * after it; that thinking often contains braces and JSON examples that would
+ * wreck brace-based extraction. Drop everything up to and including the final
+ * </think>, then remove any remaining complete blocks.
  *
- * Handles three real-world cases:
+ * @param {string | null | undefined} text
+ * @returns {string}
+ */
+export function stripReasoning(text) {
+  if (!text) return text || '';
+  let out = text;
+  const close = out.toLowerCase().lastIndexOf('</think>');
+  if (close !== -1) out = out.slice(close + '</think>'.length);
+  out = out.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  return out;
+}
+
+/**
+ * Extract a JSON object string from a model response.
+ *
+ * Handles four real-world cases:
  *   1. Raw JSON string
  *   2. JSON wrapped in ```json … ``` or ``` … ``` markdown fences
  *   3. JSON embedded somewhere inside prose text
+ *   4. JSON preceded by a reasoning model's <think>…</think> block
  *
  * @param {string | null | undefined} text
  * @returns {string} The extracted JSON string, or '' for falsy input
  */
 export function extractJSON(text) {
   if (text == null) return '';
+
+  // Case 4 — drop reasoning-model thinking first
+  text = stripReasoning(text);
 
   // Case 2 — strip markdown fences
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);

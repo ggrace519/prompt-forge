@@ -1,5 +1,31 @@
 import { describe, it, expect } from 'vitest';
-import { extractJSON, parseModelJSON, appendAspectRatio, assembleSections, IMAGE_SECTIONS, VIDEO_SECTIONS } from '../src/lib/utils.js';
+import { extractJSON, parseModelJSON, stripReasoning, appendAspectRatio, assembleSections, IMAGE_SECTIONS, VIDEO_SECTIONS } from '../src/lib/utils.js';
+
+// ── Reasoning models ───────────────────────────────────────────────────────────
+
+describe('extractJSON — reasoning models (<think>)', () => {
+  it('drops a <think> block and returns the JSON after it', () => {
+    const out = '<think>Let me reason about this.</think>{"tier":"simple"}';
+    expect(extractJSON(out)).toBe('{"tier":"simple"}');
+    expect(JSON.parse(extractJSON(out)).tier).toBe('simple');
+  });
+
+  it('handles thinking that itself contains braces / JSON examples', () => {
+    // This is the real failure: brace extraction grabbed a "{" inside the
+    // thinking, yielding "{...}</think>{...}" → "non-whitespace after JSON".
+    const out = '<think>I could output {"tier":"complex"} but it is simple.</think>\n{"tier":"simple"}';
+    const parsed = JSON.parse(extractJSON(out));
+    expect(parsed.tier).toBe('simple');
+  });
+
+  it('stripReasoning returns the answer after the final </think>', () => {
+    expect(stripReasoning('<think>a</think>answer').trim()).toBe('answer');
+  });
+
+  it('leaves plain (non-thinking) output untouched', () => {
+    expect(stripReasoning('{"tier":"standard"}')).toBe('{"tier":"standard"}');
+  });
+});
 
 // ── Happy paths ───────────────────────────────────────────────────────────────
 

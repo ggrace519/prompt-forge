@@ -126,9 +126,24 @@ const TEMPLATE_MAP = {
 
 // ── JSON extraction ───────────────────────────────────────────────────────────
 
+// Reasoning models (DeepSeek-R1, Qwen3 / QwQ, etc.) wrap their chain of thought
+// in <think>…</think> and put the real answer after it. That thinking often
+// contains braces and JSON examples, which would wreck brace-based extraction —
+// so drop everything up to and including the final </think> before parsing.
+function stripReasoning(text) {
+  if (!text) return text || '';
+  let out = text;
+  const close = out.toLowerCase().lastIndexOf('</think>');
+  if (close !== -1) out = out.slice(close + '</think>'.length);
+  // Remove any remaining complete <think>…</think> blocks defensively.
+  out = out.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  return out;
+}
+
 function extractJSON(text) {
   if (text == null) return '';
-  // Strip markdown code fences if Claude wraps the JSON
+  text = stripReasoning(text);
+  // Strip markdown code fences if the model wraps the JSON
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
   // Find the outermost {...}
@@ -487,6 +502,9 @@ app.whenReady().then(() => {
               { role: 'user', content: userMessage },
             ],
             stream: false,
+            // Native Ollama caps generation via options.num_predict — give
+            // reasoning models room to finish thinking + emit the answer.
+            options: { num_predict: maxTokens },
           }),
         });
         if (!res.ok) {
@@ -513,6 +531,8 @@ app.whenReady().then(() => {
             { role: 'user', content: userMessage },
           ],
           stream: false,
+          // Headroom so reasoning models don't get cut off mid-<think>.
+          max_tokens: maxTokens,
         }),
       });
       if (!res.ok) {
