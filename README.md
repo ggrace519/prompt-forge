@@ -1,128 +1,126 @@
 # PromptForge
 
-A Windows system tray app that turns plain task descriptions into structured, production-ready AI prompts using Claude.
+A Windows desktop app that turns a plain task description into a structured,
+production-ready AI prompt. Built on Electron + React, with a focus on a fast,
+keyboard-driven, single-window workflow.
 
-![PromptForge popup window showing a generated prompt](https://via.placeholder.com/480x640/1a1a1a/7c6af7?text=PromptForge)
+PromptForge is provider-agnostic: point it at **Anthropic**, **OpenAI**, your
+**Claude Code subscription**, or any **custom endpoint** (OpenAI-compatible,
+native Ollama, or Anthropic-compatible), and mix different models across the
+generation steps.
+
+---
 
 ## Features
 
-- Lives silently in the system tray — no taskbar clutter
-- Left-click the tray icon to pop up the 480×640 window
-- Right-click for "Open PromptForge" / "Quit"
-- Describe any task → get a structured prompt with 7 named sections
-- **Assembled** tab: one-click copy of the complete, paste-ready prompt
-- **Breakdown** tab: collapsible cards for each section with individual copy buttons
-- API key stored locally via `electron-store` (never sent anywhere except Anthropic)
+- **Tiered, two-call generation** — a lightweight *classify* call picks the
+  prompt complexity (simple / standard / complex), then a *generate* call writes
+  the prompt with the matching template.
+- **Guide-aligned prompts** — templates follow [`prompt-building-guide.md`](./prompt-building-guide.md):
+  a clear output contract, an uncertainty/abstention rule, a self-check pass, and
+  **no hand-written chain-of-thought** (modern reasoning models do it internally).
+- **Named endpoints, per-slot** — define multiple endpoints (URL + wire format +
+  key) and assign a different model to *Classify*, *Simple/Standard*, and
+  *Complex* — e.g. a local Ollama box for classify, a cloud model for generation.
+- **Model fallback** — if a model times out or errors, generation falls through
+  to your other configured models; every result is badged with the model that
+  produced it.
+- **Reasoning-model aware** — strips `<think>…</think>` blocks before parsing, so
+  DeepSeek-R1 / Qwen3 / QwQ-style models work cleanly.
+- **Image & video modes** — descriptive prompts for image (SDXL, Qwen-Image,
+  Gemini, …) and short-form video generators, with an aspect-ratio helper.
+- **Test Bench** — run the generated prompt against a sample input on your own
+  model and get a 0–10 LLM-as-judge score with critique.
+- **Command palette** (`Ctrl/⌘+K`), global summon (`Ctrl+Shift+Space`),
+  **New Prompt** (`Ctrl/⌘+N`), light/dark themes, and prompt history.
+- **In-app auto-update** from GitHub Releases — checks on launch, then installs
+  when you choose.
+- **Keys encrypted at rest** via OS-native DPAPI (Windows) / Keychain; the
+  renderer never sees decrypted keys.
 
 ---
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
-
 - Node.js ≥ 18
-- An Anthropic API key → [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+- A provider credential — an [Anthropic API key](https://console.anthropic.com/settings/keys),
+  an [OpenAI API key](https://platform.openai.com/api-keys), a running Claude Code
+  CLI (for subscription auth), or a reachable custom endpoint.
 
-### Install & Run (Development)
-
+### Develop
 ```bash
-npm install        # also auto-generates assets/tray-icon.png
-npm run dev        # starts Vite dev server + Electron
+npm install      # also generates the placeholder tray icon
+npm run dev      # Vite dev server (5173) + Electron with hot-reload
+npm test         # Vitest run
 ```
+On first launch, open **Settings** (gear icon) and add a key or endpoint.
 
-The app will appear in your system tray. Click the purple icon to open the popup.
-Enter your Anthropic API key the first time — it will be remembered.
-
-### Package for Windows
-
+### Package (Windows installer)
 ```bash
-npm run build
+npm run build    # Vite build + electron-builder → release/PromptForge Setup *.exe
 ```
 
-Output is in `release/`. The `.exe` installer is in `release/PromptForge Setup *.exe`.
-
-> **Note on the tray icon for production builds:**
-> `electron-builder` requires a `.ico` file for the Windows executable icon.
-> Run `npm install electron-icon-builder --save-dev` and add a build step, or convert
-> `assets/tray-icon.png` to `assets/tray-icon.ico` manually (e.g. with GIMP, Paint.NET,
-> or [icoconvert.com](https://icoconvert.com)), then update the `"icon"` field in
-> `package.json` → `build.win` to `"assets/tray-icon.ico"`.
+### Release (publish to GitHub for auto-update)
+```bash
+# bump "version" in package.json first, then:
+GH_TOKEN=<token> npm run release   # builds + publishes installer + latest.yml to GitHub Releases
+```
+The packaged app reads its update feed from the `build.publish` config
+(`github` → `ggrace519/prompt-forge`) and shows an in-app update banner when a
+newer release is available.
 
 ---
 
-## Project Structure
+## Providers & per-slot models
+
+Each of the three generation slots stores `{ provider, model, … }`:
+
+| Provider | Auth | How it's called |
+|---|---|---|
+| `anthropic` | API key | `api.anthropic.com/v1/messages` |
+| `anthropic` | subscription | local Claude Code CLI via `@anthropic-ai/claude-agent-sdk` |
+| `openai` | API key | `api.openai.com/v1/chat/completions` |
+| custom endpoint | optional key | per-endpoint URL; wire format `openai` / `ollama` / `anthropic` |
+
+Named endpoints + per-slot assignment let you mix models freely. Keys are stored
+DPAPI-encrypted; endpoint URLs/formats are plain config.
+
+---
+
+## Architecture
 
 ```
-prompt-forge-pro/
-├── electron/
-│   ├── main.js          # Electron main process — tray, window, IPC handlers, Anthropic call
-│   └── preload.js       # contextBridge: exposes window.electronAPI to the renderer
-├── src/
-│   ├── App.jsx          # React UI (Settings view + Main view + Results tabs)
-│   ├── main.jsx         # React entry point
-│   ├── index.css        # Full dark-theme stylesheet (CSS variables)
-│   └── lib/
-│       └── promptService.js  # Platform abstraction layer (swap for React Native)
-├── scripts/
-│   └── create-icon.js   # Generates placeholder tray icon PNG at postinstall
-├── assets/
-│   └── tray-icon.png    # 16×16 PNG tray icon (auto-generated; replace with real art)
-├── index.html           # Vite HTML entry point
-├── vite.config.js       # Vite config (base: './' for Electron file:// loading)
-└── package.json         # Scripts, deps, electron-builder config
+electron/main.js      # main process: tray/window, IPC, two-call flow, provider dispatch, auto-updater
+electron/preload.js   # contextBridge → window.electronAPI (named channels only)
+src/App.jsx           # single-file React UI (Settings | Main → Results tabs)
+src/lib/promptService.js  # platform-abstraction boundary — all renderer↔main calls go through here
+src/lib/utils.js      # pure helpers (extractJSON w/ reasoning-strip, section assembly)
 ```
+See [`CLAUDE.md`](./CLAUDE.md) for the full architecture and conventions.
 
 ---
 
-## Prompt Structure
+## Contributing
 
-Each generation returns 8 named fields:
+This repo uses a GitHub flow:
 
-| Field           | Description |
-|-----------------|-------------|
-| `role`          | The AI's identity and primary mission |
-| `instructions`  | Numbered directives with action verbs, tone, constraints |
-| `context`       | Background knowledge and situational grounding |
-| `outputFormat`  | Exact output schema or skeleton |
-| `reasoning`     | Step-by-step chain-of-thought to follow |
-| `examples`      | 1–2 few-shot input/output pairs |
-| `reinforcement` | Critical rules restated at the end |
-| `assembled`     | The complete, copy-paste-ready combined prompt |
+1. **Open an issue** describing the change.
+2. **Branch** off `main` (`feat/…`, `fix/…`, `chore/…`).
+3. **Open a PR** referencing the issue. **CI** (GitHub Actions) runs tests + a
+   renderer build on every PR.
+4. **Merge** once CI is green.
+
+Run `npm test` before pushing. New features need tests; bug fixes need a
+regression test.
 
 ---
 
-## Portability (React Native / Web)
+## License
 
-All business logic lives in `src/lib/promptService.js`.
-React components never call `window.electronAPI` directly.
+Business Source License 1.1 (BUSL-1.1) — see [`LICENSE`](./LICENSE).
+Non-production use is free; production use is permitted except offering
+PromptForge as a competing commercial prompt-engineering product/service. The
+license converts to **MIT** on the Change Date (2029-03-30).
 
-To port to React Native, replace the body of `promptService.js` with direct
-`@anthropic-ai/sdk` calls and your platform's storage/clipboard APIs.
-No component code changes are needed.
-
----
-
-## npm Scripts
-
-| Script          | What it does |
-|-----------------|--------------|
-| `npm run dev`   | Vite dev server + Electron (hot-reload) |
-| `npm run build` | Production Vite build + electron-builder packaging |
-| `npm start`     | Launch Electron against the last production build |
-| `node scripts/create-icon.js` | Re-generate the placeholder tray icon |
-
----
-
-## Troubleshooting
-
-**The tray icon doesn't appear**
-Make sure `assets/tray-icon.png` exists. Run `node scripts/create-icon.js` to regenerate it.
-
-**API errors / 401**
-Double-check your API key in the Settings view (gear icon). Keys start with `sk-ant-`.
-
-**Window appears off-screen**
-This can happen with multi-monitor setups. The window is clamped to the primary display's work area. Restart the app to re-anchor the position.
-
-**`electron-builder` fails on icon**
-Provide a `.ico` file (see packaging note above).
+Copyright © 2026 519lab.com, a registered trade name of Onward Investment LLC.
