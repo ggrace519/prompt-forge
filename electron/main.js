@@ -392,8 +392,11 @@ function writeEndpointKey(id, key) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 560,
-    height: 600,
+    // One comfortable size for every mode/state — the app no longer resizes
+    // itself when switching Text/Image/Video or showing a result. Still
+    // user-resizable if someone wants more room.
+    width: 620,
+    height: 800,
     show: false,
     frame: false,
     resizable: true,

@@ -2033,35 +2033,9 @@ button, label, span, h1, p {
 }
 
 /* Two-column layout for image/video modes */
-.main-body.media-mode {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: start;
-}
-
-/* In media mode, error banner spans both columns */
-.main-body.media-mode .error-banner {
-  grid-column: 1 / -1;
-}
-
-/* In media mode, mode-toggle spans both columns */
-.main-body.media-mode > .mode-toggle {
-  grid-column: 1 / -1;
-}
-
-/* Media mode while empty: collapse the two-column grid to one centered column,
-   keep the toggle at the top (row 1), and center the input in the rest (row 2). */
-.main-body.media-mode.is-empty {
-  grid-template-columns: minmax(0, 600px);
-  grid-template-rows: auto 1fr;
-  justify-content: center;
-}
-
-.main-body.media-mode.is-empty .input-group {
-  align-self: center;
-  max-width: none;
-}
+/* Image/Video modes use the same single-column stack as Text at the fixed
+   window size — no separate 2-column layout, no window resize. They inherit
+   the base .main-body (and .is-empty centering) layout. */
 
 /* ── Test Bench (run + grade a generated prompt) ───────────────────────────── */
 
