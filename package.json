@@ -16,7 +16,7 @@
   "build": {
     "appId": "com.promptforge.app",
     "productName": "PromptForge",
-    "copyright": "Copyright © 2025 PromptForge",
+    "copyright": "Copyright © 2026 519lab.com, a registered trade name of Onward Investment LLC",
     "directories": {
       "output": "release"
     },
