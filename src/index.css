@@ -1006,22 +1006,29 @@ button, label, span, h1, p {
 
 .tab-bar {
   display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-/* ── Result model badge (which model produced this) ────────────────────────── */
+/* Tab bar groups: tabs on the left, result metadata (model + tier) on the right. */
+.tab-bar-tabs {
+  display: flex;
+  min-width: 0;
+}
 
-.result-meta {
+.tab-bar-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  min-width: 0;
+  padding-right: 8px;
 }
+
+/* ── Result model badge (which model produced this) ────────────────────────── */
 
 .result-meta-model {
   display: inline-flex;
@@ -1058,8 +1065,8 @@ button, label, span, h1, p {
 }
 
 .tab-btn {
-  flex: 1;
-  padding: 7px 0;
+  flex: 0 0 auto;
+  padding: 7px 14px;
   background: transparent;
   border: none;
   box-shadow: inset 0 -2px 0 transparent;
@@ -1187,13 +1194,14 @@ button, label, span, h1, p {
   border-left-color: var(--accent);
 }
 
-/* card-toggle is the actual expand/collapse button — takes all remaining width */
+/* card-toggle is the actual expand/collapse button — takes all remaining width.
+   Collapsed, it shows the label followed by a muted one-line content preview. */
 .card-toggle {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 9px;
   padding: 7px 6px 7px 10px;
   background: transparent;
   border: none;
@@ -1215,21 +1223,48 @@ button, label, span, h1, p {
   outline-offset: -2px;
 }
 
-/* Copy button sits outside card-toggle at the right edge */
+/* Per-section word count — at-a-glance heft */
+.card-meta {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+
+/* Copy + chevron sit at the right edge */
 .card-copy-btn {
   flex-shrink: 0;
-  margin-right: 6px;
+  margin-right: 2px;
+}
+
+.card-chevron-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px 4px 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
 .card-label {
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: 500;
   color: var(--text);
+  white-space: nowrap;
+}
+
+.card-preview {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .section-card.expanded .card-label {
