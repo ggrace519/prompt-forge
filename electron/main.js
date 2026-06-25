@@ -11,6 +11,7 @@ const {
   nativeImage,
   safeStorage,
   shell,
+  globalShortcut,
 } = require('electron');
 const path  = require('path');
 const Store = require('electron-store');
@@ -449,6 +450,9 @@ app.whenReady().then(() => {
 
   // Open visibly on launch — this is a real app, not a tray-only popup.
   showWindow();
+
+  // Global summon — bring PromptForge to the front from any app (Raycast-style).
+  globalShortcut.register('CommandOrControl+Shift+Space', showWindow);
 
   // ── Provider call helper ──────────────────────────────────────────────────
 
@@ -1114,4 +1118,9 @@ app.whenReady().then(() => {
 // tray mode the window hides rather than closes, so this never fires then.
 app.on('window-all-closed', () => {
   app.quit();
+});
+
+// Release the global summon shortcut on quit.
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });

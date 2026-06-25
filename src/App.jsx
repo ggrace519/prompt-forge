@@ -32,6 +32,15 @@ const ENDPOINT_FORMATS = [
   { value: 'anthropic', label: 'Anthropic / Claude' },
 ];
 
+// Specific starter tasks shown as pills under the empty input (NN/g: prefer
+// concrete over generic). One per tier-ish to hint the range.
+const TASK_EXAMPLES = [
+  'Write a cold outreach email to a potential client',
+  'Summarize a research paper into key takeaways',
+  'Build a code-review agent that flags security issues',
+  'Design a multi-turn tutoring system for high-school math',
+];
+
 // ── Slot encoding helpers ─────────────────────────────────────────────────────
 // A slot is `{ provider, authMethod, model }` where authMethod distinguishes
 // `anthropic` API-key from Claude Code subscription. Encoded form is used as
@@ -341,6 +350,95 @@ function Toast({ message, onDone }) {
     return () => clearTimeout(t);
   }, [onDone]);
   return <div className="toast" role="status">{message}</div>;
+}
+
+// ── CommandPalette — Ctrl/⌘+K, dependency-free ────────────────────────────────
+
+function matchesQuery(label, q) {
+  if (!q) return true;
+  const lower = label.toLowerCase();
+  if (lower.includes(q)) return true;
+  // initials match, e.g. "gp" → "Generate Prompt"
+  const initials = label.split(/[\s·]+/).map((w) => w[0] || '').join('').toLowerCase();
+  return initials.includes(q);
+}
+
+function CommandPalette({ open, onClose, actions }) {
+  const [query, setQuery] = useState('');
+  const [sel, setSel]     = useState(0);
+  const inputRef = useRef(null);
+
+  const filtered = actions.filter((a) => !a.hidden && matchesQuery(a.label, query.toLowerCase().trim()));
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      setSel(0);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+  useEffect(() => { setSel(0); }, [query]);
+
+  if (!open) return null;
+
+  function runAt(i) {
+    const a = filtered[i];
+    if (!a || a.disabled) return;
+    onClose();
+    a.run();
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Escape')        { e.preventDefault(); onClose(); }
+    else if (e.key === 'ArrowDown'){ e.preventDefault(); setSel((s) => Math.min(s + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp')  { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
+    else if (e.key === 'Enter')    { e.preventDefault(); runAt(sel); }
+  }
+
+  return (
+    <div className="cmdk-overlay" onMouseDown={onClose}>
+      <div
+        className="cmdk-panel"
+        role="dialog"
+        aria-label="Command palette"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <input
+          ref={inputRef}
+          className="cmdk-input"
+          placeholder="Type a command…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <div className="cmdk-list" role="listbox">
+          {filtered.length === 0 ? (
+            <div className="cmdk-empty">No matching commands</div>
+          ) : filtered.map((a, i) => (
+            <button
+              key={a.id}
+              role="option"
+              aria-selected={i === sel}
+              className={`cmdk-item${i === sel ? ' active' : ''}`}
+              onMouseMove={() => setSel(i)}
+              onClick={() => runAt(i)}
+              disabled={a.disabled}
+            >
+              <span className="cmdk-label">{a.label}</span>
+              {a.hint && <span className="cmdk-hint">{a.hint}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="cmdk-footer">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> run</span>
+          <span><kbd>esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -1037,6 +1135,27 @@ function SettingsView({
   );
 }
 
+// ── SkeletonResult — shimmer placeholder during the classify→generate wait ───
+
+function SkeletonResult() {
+  return (
+    <div className="skeleton-result" aria-hidden="true">
+      <div className="skeleton-tabs">
+        <span className="skeleton-bar sk-tab" />
+        <span className="skeleton-bar sk-tab" />
+        <span className="skeleton-bar sk-tab" />
+      </div>
+      <div className="skeleton-body">
+        <span className="skeleton-bar" style={{ width: '90%' }} />
+        <span className="skeleton-bar" style={{ width: '75%' }} />
+        <span className="skeleton-bar" style={{ width: '82%' }} />
+        <span className="skeleton-bar" style={{ width: '60%' }} />
+        <span className="skeleton-bar" style={{ width: '70%' }} />
+      </div>
+    </div>
+  );
+}
+
 // ── MainView ──────────────────────────────────────────────────────────────────
 
 function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTargets, history, setHistory, onOpenSettings, theme, onToggleTheme }) {
@@ -1057,6 +1176,19 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
   const [anthropicModels, setAnthropicModels] = useState(FALLBACK_ANTHROPIC_MODELS);
   const [openaiModels, setOpenaiModels] = useState(FALLBACK_OPENAI_MODELS);
   const [endpointModels, setEndpointModels] = useState({}); // id → [models]
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Ctrl/⌘+K toggles the command palette from anywhere in the main view.
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Load persisted mode + aspect ratio on mount
   useEffect(() => {
@@ -1203,6 +1335,22 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
     ? <StepIndicator step={loadingStep} />
     : 'Generate Prompt';
 
+  const hasTextResult = !!result && mode === 'text';
+  const paletteActions = [
+    { id: 'generate', label: 'Generate Prompt', hint: 'Ctrl+↵', disabled: !task.trim() || loading, run: () => handleGenerate() },
+    ...(hasTextResult ? [
+      { id: 'copy',      label: 'Copy Assembled Prompt', run: () => { promptService.copyToClipboard(result.assembled); setToast('Copied to clipboard'); } },
+      { id: 'tab-asm',   label: 'View · Assembled', run: () => setActiveTab('assembled') },
+      { id: 'tab-brk',   label: 'View · Breakdown', run: () => setActiveTab('breakdown') },
+      { id: 'tier-s',    label: 'Regenerate · Simple',   run: () => handleGenerate('simple') },
+      { id: 'tier-st',   label: 'Regenerate · Standard', run: () => handleGenerate('standard') },
+      { id: 'tier-c',    label: 'Regenerate · Complex',  run: () => handleGenerate('complex') },
+    ] : []),
+    { id: 'history',  label: showHistory ? 'Close History' : 'Open History', run: () => setShowHistory((v) => !v) },
+    { id: 'settings', label: 'Open Settings', run: onOpenSettings },
+    { id: 'theme',    label: theme === 'dark' ? 'Switch to Light theme' : 'Switch to Dark theme', run: onToggleTheme },
+  ];
+
   return (
     <div className="app-shell">
       <header className="top-bar">
@@ -1217,6 +1365,14 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
           </span>
         </div>
         <div className="top-bar-right">
+          <button
+            className="cmdk-chip"
+            onClick={() => setPaletteOpen(true)}
+            title="Command palette (Ctrl+K)"
+            aria-label="Open command palette"
+          >
+            <kbd>Ctrl</kbd><kbd>K</kbd>
+          </button>
           <button
             className="icon-btn"
             onClick={onToggleTheme}
@@ -1281,11 +1437,24 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
               onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate(); }}
               spellCheck={false}
             />
-            {task.length > 0 && (
+            {task.length > 0 ? (
               <div className="input-hint-row">
                 <span className="char-count">{task.length} chars</span>
               </div>
-            )}
+            ) : (mode === 'text' && !result && !loading) ? (
+              <div className="example-pills" aria-label="Example tasks">
+                {TASK_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    className="example-pill"
+                    onClick={() => { setTask(ex); requestAnimationFrame(() => textareaRef.current?.focus()); }}
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             {/* Override row toggle */}
             <div className="input-actions-row">
@@ -1351,7 +1520,9 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
             </div>
           )}
 
-          {result && (
+          {loading && <SkeletonResult />}
+
+          {result && !loading && (
             <ResultsPanel
               result={result}
               tier={tier}
@@ -1370,6 +1541,12 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
       )}
 
       {toast && <Toast message={toast} onDone={() => setToast('')} />}
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        actions={paletteActions}
+      />
     </div>
   );
 }

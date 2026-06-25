@@ -190,6 +190,28 @@ describe('App — Main view', () => {
     expect(screen.getByRole('button', { name: /Generate Prompt/i })).toBeDisabled();
   });
 
+  it('shows example-task pills on the empty input and fills the box when one is clicked', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    const pill = screen.getByRole('button', { name: /Summarize a research paper/i });
+    fireEvent.click(pill);
+
+    expect(screen.getByPlaceholderText(/Describe your task/).value).toMatch(/Summarize a research paper/);
+  });
+
+  it('opens the command palette on Ctrl+K and filters actions', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const input = await screen.findByPlaceholderText('Type a command…');
+    expect(input).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'settings' } });
+    expect(screen.getByRole('option', { name: /Open Settings/i })).toBeInTheDocument();
+  });
+
   it('calls generatePrompt with the task on submit', async () => {
     const MOCK_RESULT = {
       success: true,

@@ -464,6 +464,100 @@ button, label, span, h1, p {
   user-select: none;
 }
 
+/* ── Example-task pills (empty-state on-ramp) ──────────────────────────────── */
+
+.example-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-top: 6px;
+}
+
+.example-pill {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+  transition: color var(--transition), background var(--transition),
+              border-color var(--transition), transform var(--transition);
+}
+
+.example-pill:hover {
+  color: var(--text);
+  background: var(--surface-3);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.example-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Skeleton result (classify→generate wait) ─────────────────────────────── */
+
+.skeleton-result {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-tabs {
+  display: flex;
+  gap: 0;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.skeleton-tabs .sk-tab { width: 64px; height: 11px; margin-right: 14px; }
+
+.skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 14px 12px;
+}
+
+.skeleton-bar {
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: 0 0; }
+}
+
+/* ── Reduced-motion: honor the OS setting; kill non-essential motion ───────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .skeleton-bar { animation: none; background-position: 0 0; }
+}
+
 .text-input:hover,
 .task-textarea:hover {
   border-color: var(--border-focus);
@@ -648,6 +742,19 @@ button, label, span, h1, p {
 @keyframes copied-pulse {
   0%   { opacity: 0.6; }
   100% { opacity: 1; }
+}
+
+/* Signature confirm beat: the checkmark pops in on copy success. */
+.btn-copy.copied svg,
+.card-copy-btn.success svg,
+.icon-btn.success svg {
+  animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes check-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* ── Links ──────────────────────────────────────────────────────────────────── */
@@ -867,6 +974,12 @@ button, label, span, h1, p {
   /* Grow to fill available space in the expanded 640px window */
   flex: 1;
   min-height: 0;
+  animation: result-in 0.18s ease;
+}
+
+@keyframes result-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Tab bar ────────────────────────────────────────────────────────────────── */
@@ -1408,6 +1521,146 @@ button, label, span, h1, p {
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+/* ── Command palette (Ctrl/⌘+K) ────────────────────────────────────────────── */
+
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 64px;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: cmdk-fade 0.12s ease;
+}
+
+@keyframes cmdk-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.cmdk-panel {
+  width: min(420px, calc(100% - 32px));
+  max-height: calc(100% - 96px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  animation: cmdk-pop 0.12s ease;
+}
+
+@keyframes cmdk-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cmdk-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 13px 14px;
+  outline: none;
+}
+
+.cmdk-input::placeholder { color: var(--text-dim); }
+
+.cmdk-list {
+  overflow-y: auto;
+  padding: 6px;
+  min-height: 0;
+}
+
+.cmdk-list::-webkit-scrollbar { width: 6px; }
+.cmdk-list::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmdk-item.active { background: var(--accent-dim); }
+.cmdk-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.cmdk-item.active .cmdk-label { color: var(--accent); }
+
+.cmdk-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cmdk-hint {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.cmdk-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.cmdk-footer {
+  display: flex;
+  gap: 14px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.cmdk-footer kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 2px;
+  color: var(--text);
+}
+
+/* The ⌘K affordance chip in the top bar */
+.cmdk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 6px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.cmdk-chip:hover { color: var(--text-muted); border-color: var(--border-focus); }
+.cmdk-chip kbd { font-family: inherit; font-size: inherit; }
 
 /* ── History panel ─────────────────────────────────────────────────────────── */
 
