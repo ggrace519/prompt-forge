@@ -42,6 +42,27 @@ const TASK_EXAMPLES = [
   'Design a multi-turn tutoring system for high-school math',
 ];
 
+const IMAGE_EXAMPLES = [
+  'A neon-lit cyberpunk alley in the rain',
+  'Cozy isometric coffee shop, 3D render',
+  'Astronaut portrait, dramatic golden-hour light',
+  'Watercolor red fox in an autumn forest',
+];
+
+const VIDEO_EXAMPLES = [
+  'Drone flyover of misty mountains at dawn',
+  'Timelapse of a city street from day to night',
+  'Slow-motion coffee pour into a glass',
+  'A paper airplane gliding through an office',
+];
+
+const EXAMPLES_BY_MODE = { text: TASK_EXAMPLES, image: IMAGE_EXAMPLES, video: VIDEO_EXAMPLES };
+const PLACEHOLDER_BY_MODE = {
+  text:  'Describe your task... (Ctrl+Enter to generate)',
+  image: 'Describe your image... (Ctrl+Enter to generate)',
+  video: 'Describe your video... (Ctrl+Enter to generate)',
+};
+
 // ── Slot encoding helpers ─────────────────────────────────────────────────────
 // A slot is `{ provider, authMethod, model }` where authMethod distinguishes
 // `anthropic` API-key from Claude Code subscription. Encoded form is used as
@@ -1611,7 +1632,7 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
             <textarea
               ref={textareaRef}
               className="task-textarea"
-              placeholder="Describe your task... (Ctrl+Enter to generate)"
+              placeholder={PLACEHOLDER_BY_MODE[mode] || PLACEHOLDER_BY_MODE.text}
               value={task}
               onChange={(e) => setTask(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate(); }}
@@ -1621,9 +1642,9 @@ function MainView({ slotConfig, setSlotConfig, endpoints, openaiApiKey, sendTarg
               <div className="input-hint-row">
                 <span className="char-count">{task.length} chars</span>
               </div>
-            ) : (mode === 'text' && !result && !loading) ? (
-              <div className="example-pills" aria-label="Example tasks">
-                {TASK_EXAMPLES.map((ex) => (
+            ) : (!result && !loading) ? (
+              <div className="example-pills" aria-label={`Example ${mode} prompts`}>
+                {(EXAMPLES_BY_MODE[mode] || TASK_EXAMPLES).map((ex) => (
                   <button
                     key={ex}
                     type="button"
