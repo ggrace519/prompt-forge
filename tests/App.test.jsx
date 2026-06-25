@@ -208,6 +208,21 @@ describe('App — Main view', () => {
     expect(screen.getByPlaceholderText(/Describe your task/).value).toMatch(/Summarize a research paper/);
   });
 
+  it('shows image-specific suggestion pills + placeholder in Image mode', async () => {
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }));
+
+    await waitFor(() => screen.getByPlaceholderText(/Describe your image/));
+    const pill = screen.getByRole('button', { name: /cyberpunk alley/i });
+    fireEvent.click(pill);
+    expect(screen.getByPlaceholderText(/Describe your image/).value).toMatch(/cyberpunk alley/);
+
+    // The text-task examples should not be present in Image mode.
+    expect(screen.queryByRole('button', { name: /Summarize a research paper/i })).not.toBeInTheDocument();
+  });
+
   it('opens the command palette on Ctrl+K and filters actions', async () => {
     render(<App />);
     await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
