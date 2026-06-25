@@ -2164,3 +2164,88 @@ button, label, span, h1, p {
 }
 
 .tb-output { max-height: 220px; overflow: auto; }
+
+/* ── Update banner + settings ──────────────────────────────────────────────── */
+
+.update-banner {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 7px 8px 7px 14px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  z-index: 250;
+  animation: toast-in 0.2s ease;
+}
+
+.update-banner-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.update-banner-text {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.update-banner-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.update-progress {
+  width: 120px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.update-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.update-banner-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+
+.update-banner-dismiss:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.update-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.update-settings-version {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}

@@ -364,6 +364,46 @@ function Toast({ message, onDone }) {
   return <div className="toast" role="status">{message}</div>;
 }
 
+// ── UpdateBanner — surfaces an available/downloading/ready update ──────────────
+
+function UpdateBanner({ status, dismissed, onDownload, onInstall, onDismiss }) {
+  const s = status?.status;
+  if (dismissed || (s !== 'available' && s !== 'downloading' && s !== 'downloaded')) return null;
+
+  return (
+    <div className="update-banner" role="status">
+      <span className="update-banner-dot" />
+      {s === 'available' && (
+        <>
+          <span className="update-banner-text">
+            Update{status.version ? ` v${status.version}` : ''} available
+          </span>
+          <button className="btn btn-primary update-banner-btn" onClick={onDownload}>Download</button>
+        </>
+      )}
+      {s === 'downloading' && (
+        <>
+          <span className="update-banner-text">Downloading update… {status.percent ?? 0}%</span>
+          <div className="update-progress">
+            <div className="update-progress-fill" style={{ width: `${status.percent ?? 0}%` }} />
+          </div>
+        </>
+      )}
+      {s === 'downloaded' && (
+        <>
+          <span className="update-banner-text">
+            Update{status.version ? ` v${status.version}` : ''} ready to install
+          </span>
+          <button className="btn btn-primary update-banner-btn" onClick={onInstall}>Restart &amp; Install</button>
+        </>
+      )}
+      <button className="update-banner-dismiss" onClick={onDismiss} aria-label="Dismiss update notice">
+        <IconX />
+      </button>
+    </div>
+  );
+}
+
 // ── CommandPalette — Ctrl/⌘+K, dependency-free ────────────────────────────────
 
 function matchesQuery(label, q) {
@@ -480,6 +520,27 @@ export default function App() {
   const [sendTargets,   setSendTargets]   = useState([]);
   const [history,       setHistory]       = useState([]);
   const [theme,         setTheme]         = useState('dark');
+  const [appVersion,    setAppVersion]    = useState('');
+  const [updateStatus,  setUpdateStatus]  = useState(null); // { status, version?, percent?, message? }
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+
+  // Auto-update: read the running version + subscribe to update lifecycle events.
+  useEffect(() => {
+    promptService.getAppVersion().then((v) => setAppVersion(v || '')).catch(() => {});
+    const unsubscribe = promptService.onUpdateStatus((payload) => {
+      setUpdateStatus(payload);
+      if (payload?.status === 'available' || payload?.status === 'downloaded') setUpdateDismissed(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const checkForUpdates = useCallback(() => {
+    setUpdateStatus({ status: 'checking' });
+    promptService.checkForUpdates().then((r) => {
+      if (r && r.dev) setUpdateStatus({ status: 'dev' });
+      else if (r && r.ok === false) setUpdateStatus({ status: 'error', message: r.error });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -534,35 +595,56 @@ export default function App() {
     );
   }
 
+  const updateBanner = (
+    <UpdateBanner
+      status={updateStatus}
+      dismissed={updateDismissed}
+      onDownload={() => promptService.downloadUpdate()}
+      onInstall={() => promptService.installUpdate()}
+      onDismiss={() => setUpdateDismissed(true)}
+    />
+  );
+
   if (view === 'settings') {
     return (
-      <SettingsView
-        apiKey={apiKey}
-        openaiApiKey={openaiApiKey}
-        slotConfig={slotConfig}
-        endpoints={endpoints}
-        sendTargets={sendTargets}
-        onSave={handleSettingsSaved}
-        onBack={canGoBack ? () => setView('main') : null}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <>
+        <SettingsView
+          apiKey={apiKey}
+          openaiApiKey={openaiApiKey}
+          slotConfig={slotConfig}
+          endpoints={endpoints}
+          sendTargets={sendTargets}
+          onSave={handleSettingsSaved}
+          onBack={canGoBack ? () => setView('main') : null}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          appVersion={appVersion}
+          updateStatus={updateStatus}
+          onCheckUpdates={checkForUpdates}
+          onDownloadUpdate={() => promptService.downloadUpdate()}
+          onInstallUpdate={() => promptService.installUpdate()}
+        />
+        {updateBanner}
+      </>
     );
   }
 
   return (
-    <MainView
-      slotConfig={slotConfig}
-      setSlotConfig={setSlotConfig}
-      endpoints={endpoints}
-      openaiApiKey={openaiApiKey}
-      sendTargets={sendTargets}
-      history={history}
-      setHistory={setHistory}
-      onOpenSettings={() => setView('settings')}
-      theme={theme}
-      onToggleTheme={toggleTheme}
-    />
+    <>
+      <MainView
+        slotConfig={slotConfig}
+        setSlotConfig={setSlotConfig}
+        endpoints={endpoints}
+        openaiApiKey={openaiApiKey}
+        sendTargets={sendTargets}
+        history={history}
+        setHistory={setHistory}
+        onOpenSettings={() => setView('settings')}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+      {updateBanner}
+    </>
   );
 }
 
@@ -668,6 +750,19 @@ function SlotModelSelect({
   );
 }
 
+function updateStatusLine(status) {
+  switch (status?.status) {
+    case 'checking':    return 'Checking for updates…';
+    case 'available':   return `Update v${status.version} is available.`;
+    case 'downloading': return `Downloading… ${status.percent ?? 0}%`;
+    case 'downloaded':  return `Update v${status.version} downloaded — ready to install.`;
+    case 'none':        return "You're on the latest version.";
+    case 'error':       return `Couldn't check for updates: ${status.message || 'unknown error'}`;
+    case 'dev':         return 'Updates are disabled in development.';
+    default:            return 'PromptForge checks GitHub for new versions on launch.';
+  }
+}
+
 function SettingsView({
   apiKey: currentApiKey, openaiApiKey: currentOpenaiApiKey,
   slotConfig: currentSlotConfig,
@@ -675,6 +770,7 @@ function SettingsView({
   sendTargets: currentSendTargets,
   onSave, onBack,
   theme, onToggleTheme,
+  appVersion, updateStatus, onCheckUpdates, onDownloadUpdate, onInstallUpdate,
 }) {
   const [key,             setKey]             = useState('');
   const [openaiKey,       setOpenaiKey]       = useState('');
@@ -1113,6 +1209,39 @@ function SettingsView({
               </button>
             </div>
           </div>
+        </SettingsSectionCard>
+
+        {/* Updates */}
+        <SettingsSectionCard
+          title="Updates"
+          summary={appVersion ? `v${appVersion}` : ''}
+          defaultOpen={false}
+        >
+          <div className="update-settings-row">
+            <span className="update-settings-version">PromptForge {appVersion ? `v${appVersion}` : ''}</span>
+            <button
+              className="btn btn-secondary"
+              onClick={onCheckUpdates}
+              disabled={updateStatus?.status === 'checking' || updateStatus?.status === 'downloading'}
+            >
+              {updateStatus?.status === 'checking'
+                ? <><span className="btn-spinner" /> Checking…</>
+                : 'Check for updates'}
+            </button>
+          </div>
+          <p className="settings-desc" style={{ textAlign: 'left', padding: 0, marginTop: 2 }}>
+            {updateStatusLine(updateStatus)}
+          </p>
+          {updateStatus?.status === 'available' && (
+            <button className="btn btn-primary btn-full" onClick={onDownloadUpdate}>
+              Download v{updateStatus.version}
+            </button>
+          )}
+          {updateStatus?.status === 'downloaded' && (
+            <button className="btn btn-primary btn-full" onClick={onInstallUpdate}>
+              Restart &amp; Install v{updateStatus.version}
+            </button>
+          )}
         </SettingsSectionCard>
 
         {/* Window behavior */}

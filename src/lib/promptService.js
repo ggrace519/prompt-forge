@@ -155,6 +155,30 @@ export async function saveTheme(theme) {
   return getIPC().saveTheme(theme);
 }
 
+// ── Auto-update ─────────────────────────────────────────────────────────────
+
+export async function getAppVersion() {
+  return getIPC().getAppVersion();
+}
+
+export async function checkForUpdates() {
+  return getIPC().checkForUpdates();
+}
+
+export async function downloadUpdate() {
+  return getIPC().downloadUpdate();
+}
+
+export async function installUpdate() {
+  return getIPC().installUpdate();
+}
+
+/** Subscribe to update lifecycle events. Returns an unsubscribe function. */
+export function onUpdateStatus(callback) {
+  const api = getIPC();
+  return api.onUpdateStatus ? api.onUpdateStatus(callback) : () => {};
+}
+
 // ── Window controls ─────────────────────────────────────────────────────────
 
 export async function closeWindow() {

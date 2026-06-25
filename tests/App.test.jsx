@@ -40,6 +40,11 @@ vi.mock('../src/lib/promptService.js', () => ({
   saveLastMode:        vi.fn(),
   getLastAspectRatio:  vi.fn(),
   saveLastAspectRatio: vi.fn(),
+  getAppVersion:       vi.fn(),
+  checkForUpdates:     vi.fn(),
+  downloadUpdate:      vi.fn(),
+  installUpdate:       vi.fn(),
+  onUpdateStatus:      vi.fn(),
 }));
 
 import * as promptService from '../src/lib/promptService.js';
@@ -76,6 +81,9 @@ function setupDefaultMocks() {
   promptService.saveLastMode.mockResolvedValue(true);
   promptService.getLastAspectRatio.mockResolvedValue('1:1');
   promptService.saveLastAspectRatio.mockResolvedValue(true);
+  promptService.getAppVersion.mockResolvedValue('1.0.0');
+  promptService.onUpdateStatus.mockReturnValue(() => {});
+  promptService.checkForUpdates.mockResolvedValue({ ok: true });
 }
 
 beforeEach(() => {
@@ -287,6 +295,19 @@ describe('App — Main view', () => {
 
     expect(screen.getByPlaceholderText(/Describe your task/).value).toBe('');
     expect(screen.queryByText('THE FULL PROMPT TEXT')).not.toBeInTheDocument();
+  });
+
+  it('shows an update banner with a Download action when an update is available', async () => {
+    promptService.onUpdateStatus.mockImplementation((cb) => {
+      cb({ status: 'available', version: '1.0.1' });
+      return () => {};
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+
+    expect(screen.getByText(/Update v1\.0\.1 available/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Download$/i })).toBeInTheDocument();
   });
 
   it('badges the result with the model that generated it, incl. a fallback flag', async () => {
