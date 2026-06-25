@@ -196,6 +196,28 @@ function parseJudgement(text) {
   }
 }
 
+// ── Network ───────────────────────────────────────────────────────────────────
+// fetch() has no default timeout, so a hung/slow custom endpoint would block
+// forever. Abort after CALL_TIMEOUT_MS so a stalled call surfaces as an error
+// (which then triggers the model fallback chain). Generous enough not to kill a
+// legitimately slow reasoning model mid-generation.
+const CALL_TIMEOUT_MS = 120000;
+
+async function fetchWithTimeout(url, options = {}, ms = CALL_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.round(ms / 1000)}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Image / video section maps (CJS mirror of src/lib/utils.js) ───────────────
 
 const IMAGE_SECTIONS_CJS = [
@@ -512,7 +534,7 @@ app.whenReady().then(() => {
         const headers = { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' };
         if (ollamaApiKey) headers['x-api-key'] = ollamaApiKey;
 
-        const res = await fetch(`${baseUrl}/v1/messages`, {
+        const res = await fetchWithTimeout(`${baseUrl}/v1/messages`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -536,7 +558,7 @@ app.whenReady().then(() => {
         const headers = { 'Content-Type': 'application/json' };
         if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
 
-        const res = await fetch(`${baseUrl}/api/chat`, {
+        const res = await fetchWithTimeout(`${baseUrl}/api/chat`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -565,7 +587,7 @@ app.whenReady().then(() => {
       const headers = { 'Content-Type': 'application/json' };
       if (ollamaApiKey) headers['Authorization'] = `Bearer ${ollamaApiKey}`;
 
-      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      const res = await fetchWithTimeout(`${baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -590,7 +612,7 @@ app.whenReady().then(() => {
     }
 
     if (provider === 'openai') {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -652,7 +674,7 @@ app.whenReady().then(() => {
     }
 
     // Anthropic — API-key path (default).
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -701,6 +723,56 @@ app.whenReady().then(() => {
     return creds;
   }
 
+  /** A stable identity for a model config, so the fallback chain can dedupe. */
+  function credsKey(c) {
+    return `${c.provider}|${c.authMethod}|${c.endpointId || ''}|${c.model}`;
+  }
+
+  /** A short human label for which model produced something. */
+  function credsLabel(c) {
+    return c.model || c.provider;
+  }
+
+  /**
+   * Build the ordered fallback list for a slot: the slot's own model first, then
+   * the other configured slots' models (deduped). When the primary times out or
+   * fails, the next *distinct* configured model is tried.
+   */
+  function fallbackCandidates(primarySlot) {
+    const order = [primarySlot, ...['generateComplex', 'generateSimple', 'classify'].filter((s) => s !== primarySlot)];
+    const seen = new Set();
+    const candidates = [];
+    for (const slot of order) {
+      const creds = getSlotCredentials(slot);
+      const key = credsKey(creds);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({ slot, creds });
+    }
+    return candidates;
+  }
+
+  /**
+   * Call the primary slot's model, falling back through the other configured
+   * models on timeout/error. Returns the text plus which model actually produced
+   * it and whether a fallback was used.
+   */
+  async function callWithFallback(primarySlot, systemPrompt, userMessage, maxTokens) {
+    const candidates = fallbackCandidates(primarySlot);
+    let lastErr;
+    for (let i = 0; i < candidates.length; i++) {
+      const { slot, creds } = candidates[i];
+      try {
+        const text = await callProvider(creds, systemPrompt, userMessage, maxTokens);
+        return { text, creds, usedFallback: i > 0 };
+      } catch (err) {
+        lastErr = err;
+        console.error(`[fallback] ${slot} (${credsLabel(creds)}) failed: ${err.message}`);
+      }
+    }
+    throw lastErr || new Error('All configured models failed');
+  }
+
   // ── IPC Handlers ───────────────────────────────────────────────────────────
 
   // Generate a structured prompt — classify-then-generate two-call flow
@@ -712,14 +784,10 @@ app.whenReady().then(() => {
 
       // Step 1: Classify (text mode only; media modes skip classify entirely)
       if (!tier) {
-        classifyCreds = getSlotCredentials('classify');
         try {
-          const classifyText = await callProvider(
-            classifyCreds,
-            CLASSIFY_PROMPT,
-            `Classify this task: ${task}`,
-            50,
-          );
+          const { text: classifyText, creds: usedClassify } =
+            await callWithFallback('classify', CLASSIFY_PROMPT, `Classify this task: ${task}`, 50);
+          classifyCreds = usedClassify;
           const classifyJson = JSON.parse(extractJSON(classifyText));
           if (['simple', 'standard', 'complex'].includes(classifyJson.tier)) {
             tier = classifyJson.tier;
@@ -727,21 +795,18 @@ app.whenReady().then(() => {
             tier = 'standard';
           }
         } catch (err) {
-          console.error('[classify] fallback to standard:', err.message);
+          console.error('[classify] all models failed, defaulting to standard:', err.message);
           tier = 'standard';
         }
       }
 
-      // Step 2: Generate with the matching template
+      // Step 2: Generate with the matching template, falling back through the
+      // other configured models if the chosen one times out or errors.
       const genSlot = (tier === 'complex') ? 'generateComplex' : 'generateSimple';
-      const genCreds = getSlotCredentials(genSlot);
       const systemPrompt = TEMPLATE_MAP[tier];
 
-      const textContent = await callProvider(
-        genCreds,
-        systemPrompt,
-        `Generate a perfect AI prompt for this task: ${task}`,
-      );
+      const { text: textContent, creds: genCreds, usedFallback: generateFellBack } =
+        await callWithFallback(genSlot, systemPrompt, `Generate a perfect AI prompt for this task: ${task}`);
 
       // Parse JSON from model response, repairing common LLM JSON mistakes inside
       // string values: raw control characters and unescaped quote characters.
@@ -854,6 +919,7 @@ app.whenReady().then(() => {
         classifyModel: classifyCreds?.model || null,
         generateProvider: genCreds.provider,
         generateModel: genCreds.model,
+        generateFellBack: !!generateFellBack,
       };
     } catch (err) {
       console.error('[generate-prompt] error:', err);
@@ -869,13 +935,13 @@ app.whenReady().then(() => {
         return { success: false, error: 'No prompt to test.' };
       }
 
-      // 1. Run the prompt on the tier-matched generate slot.
+      // 1. Run the prompt on the tier-matched generate slot, with fallback.
       const genSlot = (tier === 'complex') ? 'generateComplex' : 'generateSimple';
-      const genCreds = getSlotCredentials(genSlot);
       const userMessage = (sampleInput && sampleInput.trim())
         ? sampleInput.trim()
         : 'Perform the task exactly as the system prompt instructs.';
-      const output = await callProvider(genCreds, assembled, userMessage);
+      const { text: output, creds: genCreds, usedFallback: runFellBack } =
+        await callWithFallback(genSlot, assembled, userMessage);
 
       // 2. Grade the output with the cheaper classify slot.
       const judgeCreds = getSlotCredentials('classify');
@@ -896,6 +962,7 @@ app.whenReady().then(() => {
         judgement,
         runProvider: genCreds.provider,
         runModel: genCreds.model,
+        runFellBack,
       };
     } catch (err) {
       console.error('[run-test-bench] error:', err);

@@ -270,6 +270,27 @@ describe('App — Main view', () => {
     });
   });
 
+  it('badges the result with the model that generated it, incl. a fallback flag', async () => {
+    promptService.generatePrompt.mockResolvedValue({
+      success: true,
+      data: { role: 'r', instructions: 'i', assembled: 'A PROMPT' },
+      tier: 'simple',
+      generateProvider: 'ollama',
+      generateModel: 'deepseek-v4-pro:cloud',
+      generateFellBack: true,
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('deepseek-v4-pro:cloud')).toBeInTheDocument();
+      expect(screen.getByText('fallback')).toBeInTheDocument();
+    });
+  });
+
   it('shows an error banner when generation fails', async () => {
     promptService.generatePrompt.mockRejectedValue(new Error('401 Unauthorized'));
 

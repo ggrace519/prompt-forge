@@ -43,6 +43,8 @@ The app uses a **two-call flow**: classify then generate.
 1. **Classify call** — lightweight API call determines task tier: `simple`, `standard`, or `complex`. Falls back to `standard` on error.
 2. **Generate call** — fires with the tier-matched template (`TEMPLATE_MAP[tier]`).
 
+**Model fallback + timeouts.** Both calls go through `callWithFallback(slot, …)`: it tries the slot's model first, then the other distinct configured slot models in order, so a timed-out/failed custom endpoint falls through to another configured model. All generation `fetch()`es use `fetchWithTimeout` (120s, `AbortController`) so a hung endpoint surfaces as an error instead of blocking forever. The response carries the model that actually produced the result (`generateModel`/`generateProvider`) plus `generateFellBack`, surfaced as a badge on the result and in history.
+
 **Three tiers:**
 - **Simple** (4 fields): `role`, `instructions`, `outputFormat`, `assembled`
 - **Standard** (6 fields): adds `context`, `reasoning`
