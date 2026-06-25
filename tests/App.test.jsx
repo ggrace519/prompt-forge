@@ -208,6 +208,24 @@ describe('App — Main view', () => {
     expect(screen.getByPlaceholderText(/Describe your task/).value).toMatch(/Summarize a research paper/);
   });
 
+  it('shows the forge identity (wordmark + tagline) on the empty state, and hides it after generating', async () => {
+    promptService.generatePrompt.mockResolvedValue({
+      success: true,
+      data: { role: 'r', instructions: 'i', assembled: 'A PROMPT' },
+      tier: 'simple', generateProvider: 'anthropic', generateModel: DEFAULT_MODEL,
+    });
+
+    render(<App />);
+    await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
+    expect(screen.getByText(/Turn a plain task into a structured/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe your task/), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Prompt/i }));
+    await waitFor(() => expect(screen.getByText('A PROMPT')).toBeInTheDocument());
+
+    expect(screen.queryByText(/Turn a plain task into a structured/i)).not.toBeInTheDocument();
+  });
+
   it('shows image-specific suggestion pills + placeholder in Image mode', async () => {
     render(<App />);
     await waitFor(() => screen.getByPlaceholderText(/Describe your task/));
