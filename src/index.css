@@ -2184,6 +2184,45 @@ button, label, span, h1, p {
 
 .tb-output { max-height: 220px; overflow: auto; }
 
+.prompt-audit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.prompt-audit-chip.clear { color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.prompt-audit-chip.review { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.prompt-audit-chip.high { color: #f87171; border-color: rgba(248, 113, 113, 0.45); }
+
+.prompt-audit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.prompt-audit-heading { color: var(--text); font-size: 11px; font-weight: 600; }
+.prompt-audit-panel > p { margin: 0; color: var(--text-muted); font-size: 11px; }
+.prompt-audit-finding { display: flex; align-items: flex-start; gap: 7px; }
+.prompt-audit-finding > span { width: 42px; flex: 0 0 42px; color: var(--text-dim); font-size: 9px; text-transform: uppercase; }
+.prompt-audit-finding.high > span { color: #f87171; }
+.prompt-audit-finding.medium > span { color: var(--accent); }
+.prompt-audit-finding p { margin: 0; color: var(--text); font-size: 11px; line-height: 1.35; }
+.prompt-audit-finding small { color: var(--text-dim); white-space: nowrap; }
+.prompt-audit-note { padding-top: 4px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 9px; }
+
 /* ── Update banner + settings ──────────────────────────────────────────────── */
 
 .update-banner {

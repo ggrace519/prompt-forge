@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import * as promptService from './lib/promptService';
 import { IMAGE_SECTIONS, VIDEO_SECTIONS, appendAspectRatio } from './lib/utils.js';
 import { scoreColor, scoreLabel } from './lib/testBench.js';
+import { auditPrompt, auditStatus } from './lib/promptAudit.js';
 
 const SECTIONS = [
   { key: 'role',          label: 'Role & Objective'  },
@@ -2141,6 +2142,9 @@ function TierBadgeDropdown({ tier, onTierChange }) {
 
 function AssembledTab({ assembled, sendTargets, setToast }) {
   const [copied, setCopied] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
+  const auditFindings = auditPrompt(assembled);
+  const promptAuditStatus = auditStatus(auditFindings);
 
   async function handleCopy() {
     await promptService.copyToClipboard(assembled);
@@ -2173,7 +2177,30 @@ function AssembledTab({ assembled, sendTargets, setToast }) {
             ))}
           </div>
         )}
+        <button
+          className={`prompt-audit-chip ${promptAuditStatus.level}`}
+          onClick={() => setShowAudit((value) => !value)}
+          aria-expanded={showAudit}
+          aria-label={`Prompt audit: ${promptAuditStatus.label}`}
+        >
+          <span aria-hidden="true">{promptAuditStatus.level === 'clear' ? '✓' : '!'}</span>
+          {promptAuditStatus.label}
+        </button>
       </div>
+      {showAudit && (
+        <div className="prompt-audit-panel">
+          <div className="prompt-audit-heading">Local prompt audit</div>
+          {auditFindings.length === 0 ? (
+            <p>No high-confidence privacy or portability issues found.</p>
+          ) : auditFindings.map((finding, index) => (
+            <div className={`prompt-audit-finding ${finding.severity}`} key={`${finding.code}-${finding.line}-${finding.column}-${index}`}>
+              <span>{finding.severity}</span>
+              <p>{finding.message} <small>Line {finding.line}</small></p>
+            </div>
+          ))}
+          <div className="prompt-audit-note">Advisory only · prompt content stays on this device.</div>
+        </div>
+      )}
       <pre className="assembled-text">{assembled}</pre>
     </div>
   );

@@ -12,7 +12,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./tests/setup.js'],
+    // Resolve from this config file so linked Git worktrees do not inherit the
+    // parent checkout's working directory through Vite's config loader.
+    setupFiles: [new URL('./tests/setup.js', import.meta.url).pathname],
     include: ['tests/**/*.test.{js,jsx}'],
     coverage: {
       provider: 'v8',
