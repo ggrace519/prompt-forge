@@ -1,0 +1,13 @@
+# Normalize line endings to LF in the repo, checked out as-is per platform.
+# Prevents CRLF/LF churn when this repo is worked on across Windows/WSL/Linux
+# (a full-tree CRLF diff appeared after the WSL->Debian migration).
+* text=auto eol=lf
+
+# Binary assets — never touch.
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
