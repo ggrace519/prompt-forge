@@ -61,7 +61,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.128",
     "@anthropic-ai/sdk": "^0.106.0",
-    "axios": "^1.14.0",
+    "axios": "^1.20.0",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9",
     "react": "^18.3.0",
